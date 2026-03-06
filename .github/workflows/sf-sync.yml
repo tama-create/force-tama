@@ -1,0 +1,47 @@
+name: Salesforce Sync
+
+on:
+  schedule:
+    # 毎日 日本時間 午前2時 (UTCの17時) に実行
+    - cron: '0 17 * * *'
+  workflow_dispatch: # 手動での強制実行も許可する
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Git push するために必須の権限
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main # 同期対象のブランチ名（適宜変更してください）
+          fetch-depth: 0 # sf sgd (差分計算) のためにGitの全履歴が必要
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Salesforce CLI
+        run: npm install --global @salesforce/cli
+
+      - name: Install Salesforce Git Delta
+        run: echo y | sf plugins install sfdx-git-delta
+
+      - name: Authenticate to Salesforce
+        run: |
+          echo "${{ secrets.SFDX_AUTH_URL }}" > auth.txt
+          sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias tama
+          rm -f auth.txt
+
+      - name: Configure Git Identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Execute Sync Script
+        run: |
+          chmod +x sf-sync.sh
+          ./sf-sync.sh
