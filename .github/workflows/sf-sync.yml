@@ -2,22 +2,22 @@ name: Salesforce Sync
 
 on:
   schedule:
-    # 毎日 日本時間 午前2時 (UTCの17時) に実行
-    - cron: '0 17 * * *'
-  workflow_dispatch: # 手動での強制実行も許可する
+    # 実行タイミング: 月〜金の UTC 0時〜9時 (日本時間 9時〜18時) の毎時0分
+    - cron: '0 0-9 * * 1-5'
+  workflow_dispatch: # 手動での強制実行も許可
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Git push するために必須の権限
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main # 同期対象のブランチ名（適宜変更してください）
-          fetch-depth: 0 # sf sgd (差分計算) のためにGitの全履歴が必要
+          ref: main
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
