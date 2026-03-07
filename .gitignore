@@ -21,6 +21,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# release 
+**/release/*/package.xml
+**/release/*/destructiveChanges.xml
+
 # work files
 *.tmp
 temp_*
