@@ -96,6 +96,6 @@ jobs:
       - name: Execute Sync Script
         run: |
           # 前の手順でクローンされた同期用スクリプトに実行権限を付与
-          chmod +x ~/sf-tools/sf-metaasync.sh
+          chmod +x ~/sf-tools/sf-metasync.sh
           # 実行（差分取得、メタデータダウンロード、Gitへのコミット・プッシュが行われる）
-          ~/sf-tools/sf-metaasync.sh
+          ~/sf-tools/sf-metasync.sh
