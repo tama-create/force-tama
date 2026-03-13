@@ -12,10 +12,10 @@ on:
     # 定期実行のスケジュール（UTC時刻で指定）
     # 記述: 0分 / 0時〜10時 / 毎日 / 毎月 / 月曜〜金曜
     # 意味: 平日（月〜金）の日本時間 9:00 〜 19:00 の間、1時間おきに実行される
-    - cron: '0 0-10 * * 1-5'
-  
+    - cron: "0 0-10 * * 1-5"
+
   # 手動実行の許可（GitHubの画面上から「Run workflow」ボタンで任意のタイミングで実行可能にする）
-  workflow_dispatch: 
+  workflow_dispatch:
 
 # ------------------------------------------------------------------------------
 # ジョブの定義
@@ -24,7 +24,7 @@ jobs:
   sync:
     # 実行環境: GitHubが提供する最新のUbuntu（Linux）ランナーを使用
     runs-on: ubuntu-latest
-    
+
     # 権限設定: このワークフロー実行時に発行されるトークン（GITHUB_TOKEN）の権限
     permissions:
       # スクリプト内で `git push` を実行するため、リポジトリ内容の書き込み権限を明示的に付与
@@ -48,14 +48,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # 安定稼働実績のあるバージョン20を指定
+          node-version: "20" # 安定稼働実績のあるバージョン20を指定
 
       # Step 3: Salesforce Git Delta (SGD) プラグインを動かすための Java 環境を構築
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin' # オープンソースで標準的なTemurinディストリビューション
-          java-version: '17'      # SGDの実行推奨要件を満たすバージョン17を指定
+          distribution: "temurin" # オープンソースで標準的なTemurinディストリビューション
+          java-version: "17" # SGDの実行推奨要件を満たすバージョン17を指定
 
       # Step 4: Salesforce CLI (sfコマンド) のインストール
       - name: Install Salesforce CLI
@@ -84,13 +84,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Step 8: 自作ツール群のインストールスクリプト実行
-      - name: Execute Install Script
-        run: |
-          # リポジトリ直下に配置されているインストール用スクリプトに実行権限を付与
-          chmod +x sf-install.sh
-          # 実行（ホームディレクトリ ~/sf-tools に同期用スクリプト等がクローンされる）
-          ./sf-install.sh
+      # Step 8: sf-tools のクローン（sf-metasync.sh の実行に必要）
+      - name: Clone sf-tools
+        run: git clone https://github.com/tamashimon-create/sf-tools.git ~/sf-tools
 
       # Step 9: Salesforce組織からのメタデータ取得・Git同期スクリプトの実行
       - name: Execute Sync Script

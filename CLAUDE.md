@@ -106,7 +106,11 @@ bash sf-start.sh
 - `package.json` — force-tama のものをコピーして `"name"` を変更（Prettier・Husky 等の依存関係を含む）
 - `.prettierrc` / `.prettierignore` — force-tama のものをそのままコピー
 - `.github/workflows/sf-sync.yml` — force-tama のものをコピーし、必要に応じて調整
-- GitHub Secrets に `SFDX_AUTH_URL` を登録（`sf org display --verbose --json` で取得）
+- GitHub Secrets に以下を登録（`sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'` で取得）
+  - `SFDX_AUTH_URL` — sf-sync.yml（自動同期）用
+  - `SFDX_AUTH_URL_PROD` — 本番リリース用（mainブランチ）
+  - `SFDX_AUTH_URL_STG` — stg Sandbox リリース用（stagingブランチ）
+  - `SFDX_AUTH_URL_DEV` — dev Sandbox リリース用（developmentブランチ）
 
 `npm install` は `sf-start.sh` 経由で `sf-install.sh` が自動実行する（Prettier 含む）。
 
@@ -115,7 +119,7 @@ bash sf-start.sh
 - `force-app/main/default/flexipages/` — Lightning アプリのユーティリティバー 12 件（例: `LightningSales_UtilityBar`）
 - `force-app/main/default/layouts/` — Salesforce オブジェクトのページレイアウト 199 件以上
 - `force-app/main/default/permissionsets/` — 権限セット 4 件（ProfileManager・DevOps・NamedCredentials・内部 SFDC Security）
-- `release/main/` / `release/development/` — ブランチごとの個別デプロイパッケージ定義
+- `release/main/` / `release/staging/` / `release/development/` — ブランチごとの個別デプロイパッケージ定義
 
 ## CI/CD 同期フロー（GitHub Actions）
 
@@ -123,3 +127,16 @@ bash sf-start.sh
 2. `SFDX_AUTH_URL` シークレットで Salesforce 認証
 3. `sfdx-git-delta`（Java 17 必須）でコミット間のメタデータ差分を抽出
 4. `sf-metasync.sh` が org からメタデータ取得 → Prettier フォーマット → Git に自動コミット
+
+## CI/CD リリースフロー（GitHub Actions）
+
+`.github/workflows/sf-release.yml` がブランチへのプッシュ（マージ）をトリガーに、対応する Salesforce 組織へ自動リリースする。
+
+| ブランチ      | リリース先   | 使用シークレット     |
+| ------------- | ------------ | -------------------- |
+| `main`        | 本番組織     | `SFDX_AUTH_URL_PROD` |
+| `staging`     | Sandbox: stg | `SFDX_AUTH_URL_STG`  |
+| `development` | Sandbox: dev | `SFDX_AUTH_URL_DEV`  |
+
+- `release/<branch>/deploy-target.txt` に記載されたコンポーネントをデプロイする
+- 各 Sandbox の認証 URL は `sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'` で取得し、GitHub Secrets に登録する
