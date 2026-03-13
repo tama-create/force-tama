@@ -44,6 +44,9 @@
 *.apex       text eol=lf
 *.sh         text eol=lf
 
+# --- 開発者個人設定（マージ時は自分の変更を優先）---
+release/branch_name.txt merge=ours
+
 # --- バイナリ（変換しない）---
 *.png   binary
 *.jpg   binary
