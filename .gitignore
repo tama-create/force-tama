@@ -54,3 +54,10 @@ $RECYCLE.BIN/
 **/__pycache__/
 **/.venv/
 **/venv/
+
+# sf-tools
+sf-start.sh
+sf-restart.sh
+
+# Claude Code
+.claude/
