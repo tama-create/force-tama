@@ -1,9 +1,12 @@
 # ==============================================================================
 # ワークフロー名: Salesforce Release
-# 概要: ブランチへのマージをトリガーに、対応するSalesforce組織へリリースを実行する
+# 概要: PRのマージをトリガーに、対応するSalesforce組織へリリースを実行する
 #   - main        → 本番組織 (prod)
 #   - staging     → Sandbox: stg
 #   - development → Sandbox: dev
+#
+# 【注意】sf-metasync.sh による自動伝播 push ではデプロイを実行しない。
+#         PRマージ（人間による意図的なリリース操作）時のみデプロイする。
 # ==============================================================================
 name: Salesforce Release
 
@@ -11,7 +14,9 @@ name: Salesforce Release
 # 実行トリガーの設定
 # ------------------------------------------------------------------------------
 on:
-  push:
+  # PRがマージされたときのみ発火（直接 push では発火しない）
+  pull_request:
+    types: [closed]
     branches:
       - main
       - staging
@@ -25,6 +30,8 @@ on:
 # ------------------------------------------------------------------------------
 jobs:
   release:
+    # PRイベントの場合はマージ済みのみ実行（クローズだけでは実行しない）
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     # 実行環境: GitHubが提供する最新のUbuntu（Linux）ランナーを使用
     runs-on: ubuntu-latest
 
@@ -36,7 +43,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event.pull_request.base.ref || github.ref_name }}
           # sf-release.sh がブランチ名を git symbolic-ref で取得するため、完全な履歴を取得する
           fetch-depth: 0
 
@@ -53,7 +60,7 @@ jobs:
       # Step 4a: 本番組織への認証（mainブランチのみ）
       # ※ GitHubリポジトリの Settings > Secrets に SFDX_AUTH_URL_PROD を登録しておくこと
       - name: Authenticate to Salesforce (Production)
-        if: github.ref_name == 'main'
+        if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
         run: |
           echo "${{ secrets.SFDX_AUTH_URL_PROD }}" > auth.txt
           sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias prod
@@ -62,7 +69,7 @@ jobs:
       # Step 4b: stg Sandbox への認証（stagingブランチのみ）
       # ※ GitHubリポジトリの Settings > Secrets に SFDX_AUTH_URL_STG を登録しておくこと
       - name: Authenticate to Salesforce (stg Sandbox)
-        if: github.ref_name == 'staging'
+        if: (github.event.pull_request.base.ref || github.ref_name) == 'staging'
         run: |
           echo "${{ secrets.SFDX_AUTH_URL_STG }}" > auth.txt
           sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias stg
@@ -71,7 +78,7 @@ jobs:
       # Step 4c: dev Sandbox への認証（developmentブランチのみ）
       # ※ GitHubリポジトリの Settings > Secrets に SFDX_AUTH_URL_DEV を登録しておくこと
       - name: Authenticate to Salesforce (dev Sandbox)
-        if: github.ref_name == 'development'
+        if: (github.event.pull_request.base.ref || github.ref_name) == 'development'
         run: |
           echo "${{ secrets.SFDX_AUTH_URL_DEV }}" > auth.txt
           sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias dev
@@ -85,7 +92,7 @@ jobs:
       # release/<branch>/deploy-target.txt に記載されたコンポーネントをデプロイする
       - name: Release to Salesforce
         run: |
-          BRANCH="${{ github.ref_name }}"
+          BRANCH="${{ github.event.pull_request.base.ref || github.ref_name }}"
           if [ "$BRANCH" = "main" ]; then
             TARGET="prod"
           elif [ "$BRANCH" = "staging" ]; then
