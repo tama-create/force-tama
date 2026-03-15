@@ -134,9 +134,25 @@ jobs:
           chmod +x ~/sf-tools/sf-release.sh
           ~/sf-tools/sf-release.sh --release --no-open --target "$TARGET"
 
-      # Step 8: Slack 通知（成功・失敗問わず常に実行）
+      # Step 8a: Slack スレッド TS をキャッシュから復元
+      # フィーチャーブランチ名をキーに、過去の投稿スレッドを特定する
+      - name: Restore Slack thread TS
+        if: always()
+        id: restore-slack-thread
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/slack_thread_ts
+          key: slack-thread-${{ github.event.pull_request.head.ref || github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            slack-thread-${{ github.event.pull_request.head.ref || github.ref_name }}-
+
+      # Step 8b: Slack 通知（成功・失敗問わず常に実行）
+      # 初回（dev）は新規メッセージ投稿 → 以降（stg, main）は同スレッドに返信
       - name: Notify Slack
         if: always()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
         run: |
           BRANCH="${{ github.event.pull_request.base.ref || github.ref_name }}"
           if [ "$BRANCH" = "main" ]; then
@@ -165,6 +181,41 @@ jobs:
             PR_TEXT="\n• PR: #${PR_NUMBER} ${PR_TITLE}"
           fi
 
-          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
-            -H 'Content-Type: application/json' \
-            -d "{\"text\": \"${ICON} *Salesforce Release ${STATUS_TEXT}*\n• リリース先: ${ENV_LABEL}\n• ブランチ: \`${BRANCH}\`${PR_TEXT}\n• 実行日時: ${DATETIME}\n• <${RUN_URL}|Actions ログを見る>\"}"
+          MESSAGE="${ICON} *Salesforce Release ${STATUS_TEXT}*\n• リリース先: ${ENV_LABEL}\n• ブランチ: \`${BRANCH}\`${PR_TEXT}\n• 実行日時: ${DATETIME}\n• <${RUN_URL}|Actions ログを見る>"
+
+          # キャッシュから thread_ts を読み込む（あれば返信、なければ新規投稿）
+          THREAD_TS=""
+          if [ -f /tmp/slack_thread_ts ]; then
+            THREAD_TS=$(cat /tmp/slack_thread_ts)
+          fi
+
+          if [ -n "$THREAD_TS" ]; then
+            # 既存スレッドに返信
+            PAYLOAD="{\"channel\": \"${SLACK_CHANNEL_ID}\", \"thread_ts\": \"${THREAD_TS}\", \"text\": \"${MESSAGE}\"}"
+          else
+            # 新規メッセージ投稿
+            PAYLOAD="{\"channel\": \"${SLACK_CHANNEL_ID}\", \"text\": \"${MESSAGE}\"}"
+          fi
+
+          RESPONSE=$(curl -s -X POST "https://slack.com/api/chat.postMessage" \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          echo "Slack response: $RESPONSE"
+
+          # 新規投稿のとき、返信用に thread_ts を保存する
+          if [ -z "$THREAD_TS" ]; then
+            NEW_TS=$(echo "$RESPONSE" | jq -r '.ts // empty')
+            if [ -n "$NEW_TS" ]; then
+              echo "$NEW_TS" > /tmp/slack_thread_ts
+            fi
+          fi
+
+      # Step 8c: Slack スレッド TS をキャッシュに保存
+      - name: Save Slack thread TS
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/slack_thread_ts
+          key: slack-thread-${{ github.event.pull_request.head.ref || github.ref_name }}-${{ github.run_id }}

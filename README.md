@@ -127,7 +127,20 @@ force-app/main/default/objects/MyObject__c/fields/MyField__c.field-meta.xml
 | `SFDX_AUTH_URL_PROD` | 本番 org に接続した状態で `sf org display --verbose --json \| jq -r '.result.sfdxAuthUrl'` |
 | `SFDX_AUTH_URL_STG`  | stg Sandbox に接続した状態で同上                                             |
 | `SFDX_AUTH_URL_DEV`  | dev Sandbox に接続した状態で同上                                             |
-| `SLACK_WEBHOOK_URL`  | Slack App の Incoming Webhook URL                                            |
+| `SLACK_BOT_TOKEN`    | Slack App の Bot User OAuth Token（`xoxb-` で始まる文字列）                 |
+| `SLACK_CHANNEL_ID`   | 通知先 Slack チャンネルの ID（`C` で始まる文字列）                           |
+
+**Slack Bot Token の取得手順:**
+
+1. [api.slack.com/apps](https://api.slack.com/apps) → 「Create New App」→「From scratch」
+2. アプリ名・ワークスペースを設定して作成
+3. 「OAuth & Permissions」→「Bot Token Scopes」に `chat:write` と `chat:write.public` を追加
+4. 「Install to Workspace」でインストール
+5. 表示される「Bot User OAuth Token」（`xoxb-...`）をコピーして `SLACK_BOT_TOKEN` に登録
+6. 通知先チャンネルを右クリック →「チャンネル詳細」→ チャンネル ID（`C` で始まる文字列）を `SLACK_CHANNEL_ID` に登録
+7. 通知先チャンネルで `/invite @<アプリ名>` を実行してボットを招待
+
+> **スレッド通知の仕組み:** dev → stg → main の順にリリースされると、同一フィーチャーブランチの通知がひとつのスレッドにまとまる。GitHub Actions キャッシュで `thread_ts` を引き継ぐことで実現。
 
 ### 2. Branch Protection Rules の設定
 
