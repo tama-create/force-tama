@@ -4,7 +4,9 @@
 #   - staging へのPR  → フィーチャーブランチが development にマージ済みか確認
 #   - main へのPR     → フィーチャーブランチが staging にマージ済みか確認
 #
-# 【動作】順序が守られていない場合はワーニングを出すが、マージはブロックしない
+# 【動作】
+#   - マージ元が development または staging の場合はエラーでブロック
+#   - 順序が守られていない場合はワーニングを出すが、マージはブロックしない
 # ==============================================================================
 name: Salesforce Promotion Check
 
@@ -28,6 +30,12 @@ jobs:
         run: |
           FEATURE="${{ github.event.pull_request.head.ref }}"
           BASE="${{ github.event.pull_request.base.ref }}"
+
+          # マージ元が development または staging の場合はエラーでブロック
+          if [ "$FEATURE" = "development" ] || [ "$FEATURE" = "staging" ]; then
+            echo "::error title=マージ元ブランチ不正::${FEATURE} からのPRは許可されていません。必ずフィーチャーブランチからPRを作成してください。"
+            exit 1
+          fi
 
           if [ "$BASE" = "main" ]; then
             PREV="staging"
