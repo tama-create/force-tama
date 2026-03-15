@@ -4,8 +4,7 @@
 #   - staging へのPR  → フィーチャーブランチが development にマージ済みか確認
 #   - main へのPR     → フィーチャーブランチが staging にマージ済みか確認
 #
-# 【設定推奨】GitHub の Branch protection rules で Required Status Check に
-#             "check-promotion-order" を追加すると、順番を守らないPRをブロックできる
+# 【動作】順序が守られていない場合はワーニングを出すが、マージはブロックしない
 # ==============================================================================
 name: Salesforce Promotion Check
 
@@ -44,6 +43,5 @@ jobs:
           if git merge-base --is-ancestor origin/$FEATURE origin/$PREV; then
             echo "::notice title=プロモーション順序OK::✓ ${FEATURE} は ${PREV} にマージ済みです"
           else
-            echo "::error title=プロモーション順序NG::✗ ${FEATURE} は ${PREV} にマージされていません。先に ${PREV} へのPRをマージしてください。"
-            exit 1
+            echo "::warning title=プロモーション順序未確認::⚠ ${FEATURE} は ${PREV} にまだマージされていません。意図的な場合はそのまま進めてください。"
           fi
