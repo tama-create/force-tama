@@ -114,8 +114,7 @@ bash sf-start.sh
 - `.prettierrc` / `.prettierignore` — force-tama のものをそのままコピー
 - `.github/workflows/sf-metasync.yml` — force-tama のものをコピーし、必要に応じて調整
 - GitHub Secrets に以下を登録（`sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'` で取得）
-  - `SFDX_AUTH_URL` — sf-metasync.yml（自動同期）用
-  - `SFDX_AUTH_URL_PROD` — 本番リリース用（mainブランチ）
+  - `SFDX_AUTH_URL_PROD` — sf-metasync.yml（自動同期）用 兼 本番リリース用（mainブランチ）
   - `SFDX_AUTH_URL_STG` — stg Sandbox リリース用（stagingブランチ）
   - `SFDX_AUTH_URL_DEV` — dev Sandbox リリース用（developmentブランチ）
 
@@ -131,7 +130,7 @@ bash sf-start.sh
 ## CI/CD 同期フロー（GitHub Actions）
 
 1. `.github/workflows/sf-metasync.yml` が平日 9〜19時（JST）に毎時実行、または手動トリガー
-2. `SFDX_AUTH_URL` シークレットで Salesforce 認証
+2. `SFDX_AUTH_URL_PROD` シークレットで Salesforce 認証
 3. `sfdx-git-delta`（Java 17 必須）でコミット間のメタデータ差分を抽出
 4. `sf-metasync.sh` が org からメタデータ取得 → Prettier フォーマット → Git に自動コミット
 
