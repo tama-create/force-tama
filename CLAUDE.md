@@ -146,3 +146,17 @@ bash sf-start.sh
 
 - `release/<branch>/deploy-target.txt` に記載されたコンポーネントをデプロイする
 - 各 Sandbox の認証 URL は `sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'` で取得し、GitHub Secrets に登録する
+
+### フィーチャーブランチの運用ルール（プロモーション型）
+
+複数フィーチャーの並走を安全に行うため、**プロモーション型**を採用する。
+
+```
+DEV001 ──→ development にPR・マージ  → dev Sandbox にデプロイ
+DEV001 ──→ staging にPR・マージ      → stg Sandbox にデプロイ
+DEV001 ──→ main にPR・マージ         → 本番組織にデプロイ
+```
+
+- フィーチャーブランチは `development → staging → main` の順ではなく、**各環境ブランチに直接 PR する**
+- `release/DEV001/deploy-target.txt` を一度作成すれば、3環境すべてに使い回せる
+- `release/branch_name.txt` は git 管理外（`.gitignore`）。sf-release.yml がマージ時に PR のマージ元ブランチ名（`github.event.pull_request.head.ref`）を動的に書き込む

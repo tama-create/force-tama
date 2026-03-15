@@ -1,0 +1,49 @@
+# ==============================================================================
+# ワークフロー名: Salesforce Promotion Check
+# 概要: PRのマージ順序を自動検証する
+#   - staging へのPR  → フィーチャーブランチが development にマージ済みか確認
+#   - main へのPR     → フィーチャーブランチが staging にマージ済みか確認
+#
+# 【設定推奨】GitHub の Branch protection rules で Required Status Check に
+#             "check-promotion-order" を追加すると、順番を守らないPRをブロックできる
+# ==============================================================================
+name: Salesforce Promotion Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - staging
+
+jobs:
+  check-promotion-order:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check promotion order
+        run: |
+          FEATURE="${{ github.event.pull_request.head.ref }}"
+          BASE="${{ github.event.pull_request.base.ref }}"
+
+          if [ "$BASE" = "main" ]; then
+            PREV="staging"
+          elif [ "$BASE" = "staging" ]; then
+            PREV="development"
+          else
+            echo "チェック対象外のブランチです"
+            exit 0
+          fi
+
+          git fetch origin $PREV
+
+          if git merge-base --is-ancestor origin/$FEATURE origin/$PREV; then
+            echo "::notice title=プロモーション順序OK::✓ ${FEATURE} は ${PREV} にマージ済みです"
+          else
+            echo "::error title=プロモーション順序NG::✗ ${FEATURE} は ${PREV} にマージされていません。先に ${PREV} へのPRをマージしてください。"
+            exit 1
+          fi

@@ -127,6 +127,10 @@ jobs:
           else
             TARGET="dev"
           fi
+          # PRのマージ元ブランチ名（フィーチャーブランチ名）を branch_name.txt に書き込む
+          # git管理外のため、Actions実行のたびに動的生成する
+          SOURCE="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          echo "$SOURCE" > release/branch_name.txt
           chmod +x ~/sf-tools/sf-release.sh
           ~/sf-tools/sf-release.sh --release --no-open --target "$TARGET"
 

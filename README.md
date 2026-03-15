@@ -116,6 +116,48 @@ force-app/main/default/objects/MyObject__c/fields/MyField__c.field-meta.xml
 
 ---
 
+## GitHub リポジトリの設定
+
+### 1. GitHub Secrets の登録
+
+`Settings` → `Secrets and variables` → `Actions` → `New repository secret` で以下を登録する。
+
+| シークレット名       | 値の取得方法                                                                 |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `SFDX_AUTH_URL_PROD` | 本番 org に接続した状態で `sf org display --verbose --json \| jq -r '.result.sfdxAuthUrl'` |
+| `SFDX_AUTH_URL_STG`  | stg Sandbox に接続した状態で同上                                             |
+| `SFDX_AUTH_URL_DEV`  | dev Sandbox に接続した状態で同上                                             |
+| `SLACK_WEBHOOK_URL`  | Slack App の Incoming Webhook URL                                            |
+
+### 2. Branch Protection Rules の設定
+
+`Settings` → `Branches` → `Add branch ruleset` で `main` と `staging` それぞれに設定する。
+
+**推奨設定:**
+
+| 設定項目 | 値 |
+|---|---|
+| Require a pull request before merging | ✓ |
+| Require status checks to pass | ✓ |
+| → Status check | `check-promotion-order` |
+
+> `check-promotion-order` を Required Status Check に追加することで、プロモーション順序（development → staging → main）を守らない PR のマージをブロックできる。
+
+### 3. フィーチャーブランチの運用（プロモーション型）
+
+複数フィーチャーの並走を安全に行うため、**各環境ブランチに直接 PR する**。
+
+```
+DEV001 ──→ development にPR・マージ  → dev Sandbox にデプロイ
+DEV001 ──→ staging にPR・マージ      → stg Sandbox にデプロイ
+DEV001 ──→ main にPR・マージ         → 本番組織にデプロイ
+```
+
+- `release/DEV001/deploy-target.txt` を一度作成すれば3環境すべてに使い回せる
+- `release/branch_name.txt` は git 管理外（`.gitignore`）。sf-release.yml がマージ時に自動生成する
+
+---
+
 ## 関連リポジトリ
 
 - **sf-tools** (`tamashimon-create/sf-tools`) — このプロジェクトと連携する Bash スクリプト群。`sf-start.sh` / `sf-restart.sh` は sf-tools が自動生成したラッパー。
