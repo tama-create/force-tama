@@ -43,7 +43,7 @@ Salesforce の設定・カスタマイズをバージョン管理で管理する
            ├─ OK → push 続行
            └─ NG → push ブロック
 
-[GitHub Actions / sf-sync.yml]
+[GitHub Actions / sf-metasync.yml]
    └─> sf-metasync.sh (org → Git 自動同期)
 ```
 
@@ -94,10 +94,17 @@ git add .
 git commit -m "initial commit"
 gh repo create force-xxx --private --source=. --push   # GitHub CLI 使用
 
-# 3. sf-tools のラッパーを初回生成（sf-tools がインストール済みであること）
+# 3. ブランチを作成してプッシュ（main / staging / development の3ブランチ必須）
+#    ※ 運用上1〜2層しか使わない場合でも必ず3つ作成すること
+#      （sf-propagate.yml が development ブランチの存在を前提としているため）
+git checkout -b staging && git push origin staging
+git checkout -b development && git push origin development
+git checkout main
+
+# 4. sf-tools のラッパーを初回生成（sf-tools がインストール済みであること）
 bash ~/sf-tools/sf-install.sh
 
-# 4. 開発環境を起動（org 認証・フック設置・VS Code 起動）
+# 5. 開発環境を起動（org 認証・フック設置・VS Code 起動）
 bash sf-start.sh
 ```
 
@@ -105,9 +112,9 @@ bash sf-start.sh
 
 - `package.json` — force-tama のものをコピーして `"name"` を変更（Prettier・Husky 等の依存関係を含む）
 - `.prettierrc` / `.prettierignore` — force-tama のものをそのままコピー
-- `.github/workflows/sf-sync.yml` — force-tama のものをコピーし、必要に応じて調整
+- `.github/workflows/sf-metasync.yml` — force-tama のものをコピーし、必要に応じて調整
 - GitHub Secrets に以下を登録（`sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'` で取得）
-  - `SFDX_AUTH_URL` — sf-sync.yml（自動同期）用
+  - `SFDX_AUTH_URL` — sf-metasync.yml（自動同期）用
   - `SFDX_AUTH_URL_PROD` — 本番リリース用（mainブランチ）
   - `SFDX_AUTH_URL_STG` — stg Sandbox リリース用（stagingブランチ）
   - `SFDX_AUTH_URL_DEV` — dev Sandbox リリース用（developmentブランチ）
@@ -123,7 +130,7 @@ bash sf-start.sh
 
 ## CI/CD 同期フロー（GitHub Actions）
 
-1. `.github/workflows/sf-sync.yml` が平日 9〜19時（JST）に毎時実行、または手動トリガー
+1. `.github/workflows/sf-metasync.yml` が平日 9〜19時（JST）に毎時実行、または手動トリガー
 2. `SFDX_AUTH_URL` シークレットで Salesforce 認証
 3. `sfdx-git-delta`（Java 17 必須）でコミット間のメタデータ差分を抽出
 4. `sf-metasync.sh` が org からメタデータ取得 → Prettier フォーマット → Git に自動コミット
