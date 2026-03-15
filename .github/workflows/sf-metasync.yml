@@ -69,8 +69,8 @@ jobs:
       # Step 6: Salesforce組織への認証（ログイン）
       - name: Authenticate to Salesforce
         run: |
-          # GitHub Secrets に登録した SFDX_AUTH_URL を一時ファイルに書き出し
-          echo "${{ secrets.SFDX_AUTH_URL }}" > auth.txt
+          # GitHub Secrets に登録した SFDX_AUTH_URL_PROD を一時ファイルに書き出し
+          echo "${{ secrets.SFDX_AUTH_URL_PROD }}" > auth.txt
           # 認証ファイルを使ってログインし、この組織をデフォルト（エイリアス: tama）として設定
           sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias tama
           # セキュリティのため、認証完了後は即座にURLファイルを削除
