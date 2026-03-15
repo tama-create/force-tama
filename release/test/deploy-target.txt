@@ -31,5 +31,4 @@ force-app/main/default/flexipages/FlowsApp_UtilityBar.flexipage-meta.xml
 force-app/main/default/flexipages/Integration_UtilityBar.flexipage-meta.xml
 force-app/main/default/flexipages/LightningSales_UtilityBar.flexipage-meta.xml
 force-app/main/default/flexipages/LightningSalesConsole_UtilityBar.flexipage-meta.xml
-force-app/main/default/flexipages/LightningService_UtilityBar.flexipage-meta.xml
-force-app/main/default/flexipages/RevenueCloudConsole_UtilityBar.flexipage-meta.xml
+#force-app/main/default/flexipages/LightningService_UtilityBar.flexipage-meta.xml
