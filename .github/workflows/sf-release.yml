@@ -127,5 +127,44 @@ jobs:
           else
             TARGET="dev"
           fi
+          # PRのマージ元ブランチ名（フィーチャーブランチ名）を branch_name.txt に書き込む
+          # git管理外のため、Actions実行のたびに動的生成する
+          SOURCE="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          echo "$SOURCE" > release/branch_name.txt
           chmod +x ~/sf-tools/sf-release.sh
           ~/sf-tools/sf-release.sh --release --no-open --target "$TARGET"
+
+      # Step 8: Slack 通知（成功・失敗問わず常に実行）
+      - name: Notify Slack
+        if: always()
+        run: |
+          BRANCH="${{ github.event.pull_request.base.ref || github.ref_name }}"
+          if [ "$BRANCH" = "main" ]; then
+            ENV_LABEL="🚀 本番組織 (prod)"
+          elif [ "$BRANCH" = "staging" ]; then
+            ENV_LABEL="🧪 ステージング Sandbox (stg)"
+          else
+            ENV_LABEL="🔧 結合 Sandbox (dev)"
+          fi
+
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          DATETIME=$(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S JST')
+
+          if [ "${{ job.status }}" = "success" ]; then
+            ICON=":white_check_mark:"
+            STATUS_TEXT="リリース成功"
+          else
+            ICON=":x:"
+            STATUS_TEXT="リリース失敗"
+          fi
+
+          PR_TEXT=""
+          if [ -n "$PR_NUMBER" ]; then
+            PR_TEXT="\n• PR: #${PR_NUMBER} ${PR_TITLE}"
+          fi
+
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\": \"${ICON} *Salesforce Release ${STATUS_TEXT}*\n• リリース先: ${ENV_LABEL}\n• ブランチ: \`${BRANCH}\`${PR_TEXT}\n• 実行日時: ${DATETIME}\n• <${RUN_URL}|Actions ログを見る>\"}"
