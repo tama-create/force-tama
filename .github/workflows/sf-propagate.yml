@@ -1,7 +1,8 @@
 # ==============================================================================
 # ワークフロー名: Propagate Changes
-# 概要: main ブランチへの PR マージをトリガーに、
-#       main → staging → development へ変更を伝播する
+# 概要: PR マージをトリガーに、下位ブランチへ変更を伝播する
+#   - main    への PR マージ → main → staging → development
+#   - staging への PR マージ → staging → development
 #
 # 【注意】sf-metasync.sh による直接 push では発火しない（PR マージ時のみ）。
 #         Salesforce メタデータの同期伝播は sf-metasync.sh が担う。
@@ -12,11 +13,12 @@ name: Propagate Changes
 # 実行トリガーの設定
 # ------------------------------------------------------------------------------
 on:
-  # main への PR がマージされたときのみ発火
+  # main または staging への PR がマージされたときに発火
   pull_request:
     types: [closed]
     branches:
       - main
+      - staging
 
   # 手動実行の許可
   workflow_dispatch:
@@ -48,14 +50,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Step 3: main → staging へ伝播
+      # Step 3: main → staging へ伝播（main へのマージ時のみ）
       - name: Propagate main to staging
+        if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
         run: |
           git checkout staging
           git merge origin/main --no-edit
           git push origin staging
 
-      # Step 4: staging → development へ伝播
+      # Step 4: staging → development へ伝播（main または staging へのマージ時）
       - name: Propagate staging to development
         run: |
           git checkout development
