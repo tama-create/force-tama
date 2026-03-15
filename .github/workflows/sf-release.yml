@@ -39,7 +39,34 @@ jobs:
     # 実行ステップ
     # --------------------------------------------------------------------------
     steps:
-      # Step 1: リポジトリのソースコードをランナー環境にチェックアウト（取得）する
+      # Step 1: リリース対象環境をログ出力（GitHub Actions ログ・Summary に記録）
+      - name: Show Release Target
+        run: |
+          BRANCH="${{ github.event.pull_request.base.ref || github.ref_name }}"
+          if [ "$BRANCH" = "main" ]; then
+            ENV_LABEL="🚀 本番組織 (prod)"
+          elif [ "$BRANCH" = "staging" ]; then
+            ENV_LABEL="🧪 ステージング Sandbox (stg)"
+          else
+            ENV_LABEL="🔧 結合 Sandbox (dev)"
+          fi
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          echo "::notice title=リリース先::${ENV_LABEL} | ブランチ: ${BRANCH}"
+
+          echo "## 🎯 Salesforce Release" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 項目 | 値 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| リリース先 | ${ENV_LABEL} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ブランチ | \`${BRANCH}\` |" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$PR_NUMBER" ]; then
+            echo "| PR | #${PR_NUMBER} ${PR_TITLE} |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "| 実行日時 | $(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S JST') |" >> $GITHUB_STEP_SUMMARY
+
+      # Step 2: リポジトリのソースコードをランナー環境にチェックアウト（取得）する
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -47,17 +74,17 @@ jobs:
           # sf-release.sh がブランチ名を git symbolic-ref で取得するため、完全な履歴を取得する
           fetch-depth: 0
 
-      # Step 2: Salesforce CLI を動かすための Node.js 環境を構築
+      # Step 3: Salesforce CLI を動かすための Node.js 環境を構築
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # Step 3: Salesforce CLI (sfコマンド) のインストール
+      # Step 4: Salesforce CLI (sfコマンド) のインストール
       - name: Install Salesforce CLI
         run: npm install --global @salesforce/cli
 
-      # Step 4a: 本番組織への認証（mainブランチのみ）
+      # Step 5a: 本番組織への認証（mainブランチのみ）
       # ※ GitHubリポジトリの Settings > Secrets に SFDX_AUTH_URL_PROD を登録しておくこと
       - name: Authenticate to Salesforce (Production)
         if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
@@ -66,7 +93,7 @@ jobs:
           sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias prod
           rm -f auth.txt
 
-      # Step 4b: stg Sandbox への認証（stagingブランチのみ）
+      # Step 5b: stg Sandbox への認証（stagingブランチのみ）
       # ※ GitHubリポジトリの Settings > Secrets に SFDX_AUTH_URL_STG を登録しておくこと
       - name: Authenticate to Salesforce (stg Sandbox)
         if: (github.event.pull_request.base.ref || github.ref_name) == 'staging'
@@ -75,7 +102,7 @@ jobs:
           sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias stg
           rm -f auth.txt
 
-      # Step 4c: dev Sandbox への認証（developmentブランチのみ）
+      # Step 5c: dev Sandbox への認証（developmentブランチのみ）
       # ※ GitHubリポジトリの Settings > Secrets に SFDX_AUTH_URL_DEV を登録しておくこと
       - name: Authenticate to Salesforce (dev Sandbox)
         if: (github.event.pull_request.base.ref || github.ref_name) == 'development'
@@ -84,11 +111,11 @@ jobs:
           sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias dev
           rm -f auth.txt
 
-      # Step 5: sf-tools のクローン（sf-release.sh の実行に必要）
+      # Step 6: sf-tools のクローン（sf-release.sh の実行に必要）
       - name: Clone sf-tools
         run: git clone https://github.com/tamashimon-create/sf-tools.git ~/sf-tools
 
-      # Step 6: 対応するSalesforce組織へのリリース実行
+      # Step 7: 対応するSalesforce組織へのリリース実行
       # release/<branch>/deploy-target.txt に記載されたコンポーネントをデプロイする
       - name: Release to Salesforce
         run: |
