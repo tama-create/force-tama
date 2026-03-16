@@ -18,6 +18,7 @@ on:
 
 jobs:
   check-promotion-order:
+    name: マージ順序を検証（プロモーション順序チェック）
     runs-on: ubuntu-latest
 
     steps:
