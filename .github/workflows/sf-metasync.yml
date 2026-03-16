@@ -22,6 +22,7 @@ on:
 # ------------------------------------------------------------------------------
 jobs:
   sync:
+    name: Salesforce メタデータを取得して Git へ同期
     # 実行環境: GitHubが提供する最新のUbuntu（Linux）ランナーを使用
     runs-on: ubuntu-latest
 

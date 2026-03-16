@@ -30,6 +30,7 @@ on:
 # ------------------------------------------------------------------------------
 jobs:
   release:
+    name: Salesforce リリースを実行
     # PRイベントの場合はマージ済みのみ実行（クローズだけでは実行しない）
     if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     # 実行環境: GitHubが提供する最新のUbuntu（Linux）ランナーを使用

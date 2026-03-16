@@ -31,6 +31,7 @@ permissions:
 # ------------------------------------------------------------------------------
 jobs:
   propagate:
+    name: 下流ブランチへ変更を伝播
     # PR マージ時のみ実行
     if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
