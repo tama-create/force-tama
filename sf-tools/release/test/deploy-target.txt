@@ -365,7 +365,6 @@ force-app/main/default/remoteSiteSettings/ApexDevNet.remoteSite-meta.xml
 #
 # Profile:Admin
 # Profile:Standard
-Profile:Admin
 
 # ------------------------------------------------------------------------------
 # 翻訳（Translations）
@@ -373,7 +372,7 @@ Profile:Admin
 # ※ 全翻訳が言語単位で1ファイルに集約されています。
 #
 # Translations:ja
-Translations:en_US
+# Translations:en_US
 
 # ------------------------------------------------------------------------------
 # 共有ルール（部分指定）
