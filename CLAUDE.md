@@ -43,8 +43,11 @@ Salesforce の設定・カスタマイズをバージョン管理で管理する
            ├─ OK → push 続行
            └─ NG → push ブロック
 
-[GitHub Actions / sf-metasync.yml]
-   └─> sf-metasync.sh (org → Git 自動同期)
+[GitHub Actions]
+   ├─> sf-metasync.yml       : org → Git 自動同期（平日 9〜19時 毎時）
+   ├─> sf-release.yml        : PR マージ → 対応 org へ自動リリース + Slack 通知
+   ├─> sf-propagate.yml      : main への PR マージ → staging・development へ直接伝播
+   └─> sf-promotion-check.yml: staging/main への PR 作成時にプロモーション順序を確認（警告のみ）
 ```
 
 ### sf-tools が force-tama に生成するファイル
@@ -57,18 +60,27 @@ Salesforce の設定・カスタマイズをバージョン管理で管理する
 
 ### deploy-target.txt の書き方
 
+`[files]` / `[members]` の2セクション構成。
+
 ```
-# コメント行・空行は無視される
-# Apex クラス
+[files]
+# ファイルパス（force-app/main/default/ からの相対パス）で指定
 force-app/main/default/classes/MyClass.cls
-
-# LWC
 force-app/main/default/lwc/myComponent
-
-# カスタムオブジェクト・項目
 force-app/main/default/objects/MyObject__c
 force-app/main/default/objects/MyObject__c/fields/MyField__c.field-meta.xml
+
+[members]
+# 1ファイルに複数メンバーが集約されているコンポーネントを部分指定
+# 書き方: メタデータ種別名:メンバー名
+CustomLabel:MyLabel
+Profile:Admin
+Translations:ja
 ```
+
+- `[files]` — パス指定（通常はこちら）
+- `[members]` — カスタムラベル・プロファイル・翻訳など部分デプロイ時に使用
+- 行頭 `#` はコメント、空行は無視される
 
 ### lib/common.sh（共有ライブラリ）
 
@@ -113,10 +125,15 @@ bash sf-start.sh
 - `package.json` — force-tama のものをコピーして `"name"` を変更（Prettier・Husky 等の依存関係を含む）
 - `.prettierrc` / `.prettierignore` — force-tama のものをそのままコピー
 - `.github/workflows/sf-metasync.yml` — force-tama のものをコピーし、必要に応じて調整
-- GitHub Secrets に以下を登録（`sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'` で取得）
-  - `SFDX_AUTH_URL_PROD` — sf-metasync.yml（自動同期）用 兼 本番リリース用（mainブランチ）
-  - `SFDX_AUTH_URL_STG` — stg Sandbox リリース用（stagingブランチ）
-  - `SFDX_AUTH_URL_DEV` — dev Sandbox リリース用（developmentブランチ）
+- `.github/workflows/sf-release.yml` — force-tama のものをコピー（Slack通知含む）
+- `.github/workflows/sf-propagate.yml` — force-tama のものをコピー
+- `.github/workflows/sf-promotion-check.yml` — force-tama のものをコピー
+- GitHub Secrets に以下を登録
+  - `SFDX_AUTH_URL_PROD` — `sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'`（本番org）
+  - `SFDX_AUTH_URL_STG` — 同上（stg Sandbox）
+  - `SFDX_AUTH_URL_DEV` — 同上（dev Sandbox）
+  - `SLACK_BOT_TOKEN` — Slack App の Bot User OAuth Token（`xoxb-` で始まる文字列）
+  - `SLACK_CHANNEL_ID` — 通知先 Slack チャンネル ID（`C` で始まる文字列）
 
 `npm install` は `sf-start.sh` 経由で `sf-install.sh` が自動実行する（Prettier 含む）。
 
@@ -136,7 +153,8 @@ bash sf-start.sh
 
 ## CI/CD リリースフロー（GitHub Actions）
 
-`.github/workflows/sf-release.yml` がブランチへのプッシュ（マージ）をトリガーに、対応する Salesforce 組織へ自動リリースする。
+`.github/workflows/sf-release.yml` がPR マージをトリガーに、対応する Salesforce 組織へ自動リリースする。
+`sf-metasync.sh` による直接 push では発火しない（PR マージ時のみ）。
 
 | ブランチ      | リリース先   | 使用シークレット     |
 | ------------- | ------------ | -------------------- |
@@ -146,6 +164,32 @@ bash sf-start.sh
 
 - `release/<branch>/deploy-target.txt` に記載されたコンポーネントをデプロイする
 - 各 Sandbox の認証 URL は `sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'` で取得し、GitHub Secrets に登録する
+- リリース結果は Slack（`SLACK_BOT_TOKEN` + `SLACK_CHANNEL_ID`）に通知する
+- 同一フィーチャーブランチの dev → stg → main 通知は GitHub Actions キャッシュで `thread_ts` を引き継ぎ、1つのスレッドにまとまる
+
+## CI/CD プロモーション確認（GitHub Actions）
+
+`.github/workflows/sf-promotion-check.yml` が `staging` / `main` への PR 作成時に実行される。
+
+| PR のマージ先 | 確認内容                                       |
+| ------------- | ---------------------------------------------- |
+| `staging`     | フィーチャーブランチが `development` にマージ済みか |
+| `main`        | フィーチャーブランチが `staging` にマージ済みか     |
+
+- 順序が守られていない場合は PR の Annotations に**黄色いワーニング**を表示するが、マージはブロックしない
+- マージ元が `development` / `staging` ブランチそのものの場合は `::error::` でブロック
+
+## CI/CD 変更伝播フロー（GitHub Actions）
+
+`.github/workflows/sf-propagate.yml` が `main` への PR マージをトリガーに、下位ブランチへ直接変更を伝播する。
+
+| トリガー          | 伝播先                                              |
+| ----------------- | --------------------------------------------------- |
+| `main` へのマージ | main → staging（直接）、main → development（直接） |
+
+- `git merge origin/main` を staging・development それぞれに実行してプッシュ
+- `staging` へのマージでは発火しない（staging → development の自動伝播なし）
+- `sf-metasync.sh` による直接 push では発火しない（PR マージ時のみ）
 
 ### フィーチャーブランチの運用ルール（プロモーション型）
 
