@@ -24,7 +24,7 @@ yarn-error.log*
 # release
 **/release/*/package.xml
 **/release/*/destructiveChanges.xml
-release/branch_name.txt
+sf-tools/release/branch_name.txt
 
 # work files
 *.tmp
