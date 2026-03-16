@@ -1,8 +1,8 @@
 # ==============================================================================
-# ワークフロー名: Salesforce Metasync
+# ワークフロー名: Salesforce メタデータ自動同期（定期実行）
 # 概要: Salesforce組織（Sandbox等）の最新メタデータを取得し、Gitのmainブランチへ自動同期する
 # ==============================================================================
-name: Salesforce Metasync
+name: Salesforce メタデータ自動同期（定期実行）
 
 # ------------------------------------------------------------------------------
 # 実行トリガーの設定
@@ -22,6 +22,7 @@ on:
 # ------------------------------------------------------------------------------
 jobs:
   sync:
+    name: Salesforce メタデータを取得して Git へ同期
     # 実行環境: GitHubが提供する最新のUbuntu（Linux）ランナーを使用
     runs-on: ubuntu-latest
 
@@ -35,7 +36,7 @@ jobs:
     # --------------------------------------------------------------------------
     steps:
       # Step 1: リポジトリのソースコードをランナー環境にチェックアウト（取得）する
-      - name: Checkout repository
+      - name: ソースコードを取得
         uses: actions/checkout@v6
         with:
           # 同期対象の基準となるブランチを指定
@@ -45,29 +46,29 @@ jobs:
           fetch-depth: 0
 
       # Step 2: Salesforce CLI を動かすための Node.js 環境を構築
-      - name: Setup Node.js
+      - name: Node.js をインストール
         uses: actions/setup-node@v6
         with:
           node-version: "20" # 安定稼働実績のあるバージョン20を指定
 
       # Step 3: Salesforce Git Delta (SGD) プラグインを動かすための Java 環境を構築
-      - name: Setup Java
+      - name: Java をインストール（差分抽出ツール用）
         uses: actions/setup-java@v5
         with:
           distribution: "temurin" # オープンソースで標準的なTemurinディストリビューション
           java-version: "17" # SGDの実行推奨要件を満たすバージョン17を指定
 
       # Step 4: Salesforce CLI (sfコマンド) のインストール
-      - name: Install Salesforce CLI
+      - name: Salesforce CLI をインストール
         run: npm install --global @salesforce/cli
 
       # Step 5: 差分抽出ツール (Salesforce Git Delta) のインストール
-      - name: Install Salesforce Git Delta
+      - name: 差分抽出ツール（Salesforce Git Delta）をインストール
         # インストール時の「プラグインを信頼しますか？」というプロンプトを 'echo y' で自動突破
         run: echo y | sf plugins install sfdx-git-delta
 
       # Step 6: Salesforce組織への認証（ログイン）
-      - name: Authenticate to Salesforce
+      - name: Salesforce 組織にログイン
         run: |
           # GitHub Secrets に登録した SFDX_AUTH_URL_PROD を一時ファイルに書き出し
           echo "${{ secrets.SFDX_AUTH_URL_PROD }}" > auth.txt
@@ -77,7 +78,7 @@ jobs:
           rm -f auth.txt
 
       # Step 7: Gitのコミット者情報の初期設定
-      - name: Configure Git Identity
+      - name: Git ユーザー情報を設定
         run: |
           # スクリプト内で自動コミットされる際のユーザー名とメールアドレスを設定
           # GitHub Actions のボットとして明示することで、手動コミットと区別しやすくする
@@ -85,11 +86,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       # Step 8: sf-tools のクローン（sf-metasync.sh の実行に必要）
-      - name: Clone sf-tools
+      - name: 自動化ツール（sf-tools）を取得
         run: git clone https://github.com/tamashimon-create/sf-tools.git ~/sf-tools
 
       # Step 9: Salesforce組織からのメタデータ取得・Git同期スクリプトの実行
-      - name: Execute Sync Script
+      - name: メタデータ取得・Git 同期を実行
         run: |
           # 前の手順でクローンされた同期用スクリプトに実行権限を付与
           chmod +x ~/sf-tools/sf-metasync.sh

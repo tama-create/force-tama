@@ -1,5 +1,5 @@
 # ==============================================================================
-# ワークフロー名: Propagate Changes
+# ワークフロー名: ブランチへ変更を伝播（main マージ後自動実行）
 # 概要: main への PR マージをトリガーに、各ブランチへ直接変更を伝播する
 #   - main    への PR マージ → main → staging（直接）
 #                            → main → development（直接）
@@ -7,7 +7,7 @@
 # 【注意】sf-metasync.sh による直接 push では発火しない（PR マージ時のみ）。
 #         Salesforce メタデータの同期伝播は sf-metasync.sh が担う。
 # ==============================================================================
-name: Propagate Changes
+name: ブランチへ変更を伝播（main マージ後自動実行）
 
 # ------------------------------------------------------------------------------
 # 実行トリガーの設定
@@ -31,26 +31,27 @@ permissions:
 # ------------------------------------------------------------------------------
 jobs:
   propagate:
+    name: 下流ブランチへ変更を伝播
     # PR マージ時のみ実行
     if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
       # Step 1: 完全な履歴でチェックアウト
-      - name: Checkout repository
+      - name: ソースコードを取得
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # Step 2: git ユーザー設定
-      - name: Configure git
+      - name: Git ユーザー情報を設定
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       # Step 3: main → staging へ直接伝播（main へのマージ時のみ）
-      - name: Propagate main to staging
+      - name: main から staging へ変更を伝播
         if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
         run: |
           git checkout staging
@@ -58,10 +59,9 @@ jobs:
           git push origin staging
 
       # Step 4: main → development へ直接伝播（main へのマージ時のみ）
-      - name: Propagate main to development
+      - name: main から development へ変更を伝播
         if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
         run: |
           git checkout development
           git merge origin/main --no-edit
           git push origin development
-

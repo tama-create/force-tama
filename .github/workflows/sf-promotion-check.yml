@@ -1,5 +1,5 @@
 # ==============================================================================
-# ワークフロー名: Salesforce Promotion Check
+# ワークフロー名: Salesforce マージ順序チェック
 # 概要: PRのマージ順序を自動検証する
 #   - staging へのPR  → フィーチャーブランチが development にマージ済みか確認
 #   - main へのPR     → フィーチャーブランチが staging にマージ済みか確認
@@ -8,7 +8,7 @@
 #   - マージ元が development または staging の場合はエラーでブロック
 #   - 順序が守られていない場合は警告を出すが、開発者の判断でマージは可能
 # ==============================================================================
-name: Salesforce Promotion Check
+name: Salesforce マージ順序チェック
 
 on:
   pull_request:
@@ -18,15 +18,16 @@ on:
 
 jobs:
   check-promotion-order:
+    name: マージ順序を検証（プロモーション順序チェック）
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: ソースコードを取得
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Check promotion order
+      - name: マージ順序を検証
         run: |
           FEATURE="${{ github.event.pull_request.head.ref }}"
           BASE="${{ github.event.pull_request.base.ref }}"
