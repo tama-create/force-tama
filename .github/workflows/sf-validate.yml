@@ -56,12 +56,20 @@ jobs:
       # -------------------------------------------------------------------------
       # 2. main の最新取込確認（コンフリクト予防）
       #    feature ブランチが main の最新を取り込んでいない場合は検証を失敗させる
+      #
+      #    【チェック方式】
+      #    github.event.pull_request.base.sha（PR 同期時点の main の先端 SHA）が
+      #    PR ブランチ（head.sha）の祖先に含まれるかを確認する。
+      #    → 開発者が main を取り込んでいれば base.sha は PR ブランチの履歴に含まれる
+      #    → sf-metasync.sh が Re-run 中に main を更新しても base.sha は変わらないため
+      #      誤検知しない（Re-run しても結果が変わらない）
       # -------------------------------------------------------------------------
       - name: main の最新取込確認
         run: |
-          git fetch origin main
-          BEHIND=$(git log HEAD..origin/main --oneline | wc -l)
-          if [ "$BEHIND" -gt 0 ]; then
+          PR_HEAD="${{ github.event.pull_request.head.sha }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          if ! git merge-base --is-ancestor "$BASE_SHA" "$PR_HEAD"; then
+            BEHIND=$(git log "$PR_HEAD"..origin/main --oneline | wc -l)
             echo "::error title=main未取込::main ブランチの最新変更が ${BEHIND} 件、このブランチに含まれていません。git pull origin main を実行してから再度プッシュしてください。"
             exit 1
           fi
