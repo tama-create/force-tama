@@ -1,11 +1,11 @@
 # ==============================================================================
 # ワークフロー名: Salesforce マージ順序チェック
 # 概要: PRのマージ順序を自動検証する
-#   - staging へのPR  → フィーチャーブランチが development にマージ済みか確認
+#   - staging へのPR  → フィーチャーブランチが develop にマージ済みか確認
 #   - main へのPR     → フィーチャーブランチが staging にマージ済みか確認
 #
 # 【動作】
-#   - マージ元が development または staging の場合はエラーでブロック
+#   - マージ元が develop または staging の場合はエラーでブロック
 #   - 順序が守られていない場合は警告を出すが、開発者の判断でマージは可能
 # ==============================================================================
 name: Salesforce マージ順序チェック
@@ -33,8 +33,8 @@ jobs:
           FEATURE="${{ github.event.pull_request.head.ref }}"
           BASE="${{ github.event.pull_request.base.ref }}"
 
-          # マージ元が development または staging の場合はエラーでブロック
-          if [ "$FEATURE" = "development" ] || [ "$FEATURE" = "staging" ]; then
+          # マージ元が develop または staging の場合はエラーでブロック
+          if [ "$FEATURE" = "develop" ] || [ "$FEATURE" = "staging" ]; then
             echo "::error title=マージ元ブランチ不正::${FEATURE} からのPRは許可されていません。必ずフィーチャーブランチからPRを作成してください。"
             exit 1
           fi
@@ -42,7 +42,7 @@ jobs:
           if [ "$BASE" = "main" ]; then
             PREV="staging"
           elif [ "$BASE" = "staging" ]; then
-            PREV="development"
+            PREV="develop"
           else
             echo "チェック対象外のブランチです"
             exit 0
