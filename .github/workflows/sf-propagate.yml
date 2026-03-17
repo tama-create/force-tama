@@ -2,7 +2,7 @@
 # ワークフロー名: ブランチへ変更を伝播（main マージ後自動実行）
 # 概要: main への PR マージをトリガーに、各ブランチへ直接変更を伝播する
 #   - main    への PR マージ → main → staging（直接）
-#                            → main → development（直接）
+#                            → main → develop（直接）
 #
 # 【注意】sf-metasync.sh による直接 push では発火しない（PR マージ時のみ）。
 #         Salesforce メタデータの同期伝播は sf-metasync.sh が担う。
@@ -58,10 +58,10 @@ jobs:
           git merge origin/main --no-edit
           git push origin staging
 
-      # Step 4: main → development へ直接伝播（main へのマージ時のみ）
-      - name: main から development へ変更を伝播
+      # Step 4: main → develop へ直接伝播（main へのマージ時のみ）
+      - name: main から develop へ変更を伝播
         if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
         run: |
-          git checkout development
+          git checkout develop
           git merge origin/main --no-edit
-          git push origin development
+          git push origin develop

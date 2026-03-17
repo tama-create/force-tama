@@ -20,7 +20,7 @@ on:
     branches:
       - main
       - staging
-      - development
+      - develop
 
   # 手動実行の許可（GitHubの画面上から「Run workflow」ボタンで任意のタイミングで実行可能にする）
   workflow_dispatch:
@@ -47,9 +47,9 @@ jobs:
           if [ "$BRANCH" = "main" ]; then
             ENV_LABEL="🚀 本番組織 (prod)"
           elif [ "$BRANCH" = "staging" ]; then
-            ENV_LABEL="🧪 ステージング Sandbox (stg)"
+            ENV_LABEL="🧪 ステージング Sandbox (staging)"
           else
-            ENV_LABEL="🔧 結合 Sandbox (dev)"
+            ENV_LABEL="🔧 結合 Sandbox (develop)"
           fi
           PR_TITLE="${{ github.event.pull_request.title }}"
           PR_NUMBER="${{ github.event.pull_request.number }}"
@@ -94,22 +94,22 @@ jobs:
           sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias prod
           rm -f auth.txt
 
-      # Step 5b: stg Sandbox への認証（stagingブランチのみ）
+      # Step 5b: staging Sandbox への認証（stagingブランチのみ）
       # ※ GitHubリポジトリの Settings > Secrets に SFDX_AUTH_URL_STG を登録しておくこと
       - name: ステージング組織にログイン
         if: (github.event.pull_request.base.ref || github.ref_name) == 'staging'
         run: |
           echo "${{ secrets.SFDX_AUTH_URL_STG }}" > auth.txt
-          sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias stg
+          sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias staging
           rm -f auth.txt
 
-      # Step 5c: dev Sandbox への認証（developmentブランチのみ）
+      # Step 5c: develop Sandbox への認証（developブランチのみ）
       # ※ GitHubリポジトリの Settings > Secrets に SFDX_AUTH_URL_DEV を登録しておくこと
       - name: 開発組織にログイン
-        if: (github.event.pull_request.base.ref || github.ref_name) == 'development'
+        if: (github.event.pull_request.base.ref || github.ref_name) == 'develop'
         run: |
           echo "${{ secrets.SFDX_AUTH_URL_DEV }}" > auth.txt
-          sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias dev
+          sf org login sfdx-url --sfdx-url-file auth.txt --set-default --alias develop
           rm -f auth.txt
 
       # Step 6: sf-tools のクローン（sf-release.sh の実行に必要）
@@ -124,9 +124,9 @@ jobs:
           if [ "$BRANCH" = "main" ]; then
             TARGET="prod"
           elif [ "$BRANCH" = "staging" ]; then
-            TARGET="stg"
+            TARGET="staging"
           else
-            TARGET="dev"
+            TARGET="develop"
           fi
           # PRのマージ元ブランチ名（フィーチャーブランチ名）を branch_name.txt に書き込む
           # git管理外のため、Actions実行のたびに動的生成する
@@ -147,9 +147,9 @@ jobs:
           if [ "$BRANCH" = "main" ]; then
             ENV_LABEL="🚀 本番組織 (prod)"
           elif [ "$BRANCH" = "staging" ]; then
-            ENV_LABEL="🧪 ステージング Sandbox (stg)"
+            ENV_LABEL="🧪 ステージング Sandbox (staging)"
           else
-            ENV_LABEL="🔧 結合 Sandbox (dev)"
+            ENV_LABEL="🔧 統合検証 Sandbox (develop)"
           fi
 
           PR_TITLE="${{ github.event.pull_request.title }}"

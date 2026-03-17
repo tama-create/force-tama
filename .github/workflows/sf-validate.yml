@@ -22,7 +22,7 @@
 # 【PR マージ先と使用組織の対応】
 #   main        → SFDX_AUTH_URL_PROD（本番組織）
 #   staging     → SFDX_AUTH_URL_STG（ステージング組織）
-#   development → SFDX_AUTH_URL_DEV（開発組織）
+#   develop     → SFDX_AUTH_URL_DEV（開発組織）
 #   その他      → SFDX_AUTH_URL_DEV（フォールバック）
 #
 # 【前提条件】
