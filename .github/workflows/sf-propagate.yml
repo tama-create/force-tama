@@ -65,3 +65,19 @@ jobs:
           git checkout develop
           git merge origin/main --no-edit
           git push origin develop
+
+      # Step 5: 失敗時に Slack 通知
+      - name: Slack に失敗を通知
+        if: failure()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          DATETIME=$(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S JST')
+          MESSAGE=":x: *ブランチ自動伝播が失敗しました*\n• 実行日時: ${DATETIME}\n• <${RUN_URL}|Actions ログを見る>"
+          PAYLOAD="{\"channel\": \"${SLACK_CHANNEL_ID}\", \"text\": \"${MESSAGE}\"}"
+          curl -s -X POST "https://slack.com/api/chat.postMessage" \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
