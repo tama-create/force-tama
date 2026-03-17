@@ -52,6 +52,7 @@ jobs:
 
       # Step 3: main → staging へ直接伝播（main へのマージ時のみ）
       - name: main から staging へ変更を伝播
+        id: propagate_staging
         if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
         run: |
           git checkout staging
@@ -60,13 +61,14 @@ jobs:
 
       # Step 4: main → develop へ直接伝播（main へのマージ時のみ）
       - name: main から develop へ変更を伝播
+        id: propagate_develop
         if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
         run: |
           git checkout develop
           git merge origin/main --no-edit
           git push origin develop
 
-      # Step 5: 失敗時に Slack 通知
+      # Step 5: 失敗時に Slack 通知（失敗したブランチを特定して通知）
       - name: Slack に失敗を通知
         if: failure()
         env:
@@ -75,7 +77,16 @@ jobs:
         run: |
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           DATETIME=$(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S JST')
-          MESSAGE=":x: *ブランチ自動伝播が失敗しました*\n• 実行日時: ${DATETIME}\n• <${RUN_URL}|Actions ログを見る>"
+
+          FAILED_BRANCHES=""
+          if [ "${{ steps.propagate_staging.outcome }}" = "failure" ]; then
+            FAILED_BRANCHES="${FAILED_BRANCHES}\n• 失敗ブランチ: \`staging\` （コンフリクトの可能性）"
+          fi
+          if [ "${{ steps.propagate_develop.outcome }}" = "failure" ]; then
+            FAILED_BRANCHES="${FAILED_BRANCHES}\n• 失敗ブランチ: \`develop\` （コンフリクトの可能性）"
+          fi
+
+          MESSAGE=":x: *ブランチ自動伝播が失敗しました*${FAILED_BRANCHES}\n• 実行日時: ${DATETIME}\n• <${RUN_URL}|Actions ログを見る>"
           PAYLOAD="{\"channel\": \"${SLACK_CHANNEL_ID}\", \"text\": \"${MESSAGE}\"}"
           curl -s -X POST "https://slack.com/api/chat.postMessage" \
             -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
