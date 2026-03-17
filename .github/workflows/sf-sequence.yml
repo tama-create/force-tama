@@ -28,6 +28,7 @@ jobs:
           fetch-depth: 0
 
       - name: マージ順序を検証
+        id: sequence_check
         run: |
           FEATURE="${{ github.event.pull_request.head.ref }}"
           BASE="${{ github.event.pull_request.base.ref }}"
@@ -51,6 +52,31 @@ jobs:
 
           if git merge-base --is-ancestor origin/$FEATURE origin/$PREV; then
             echo "::notice title=プロモーション順序OK::✓ ${FEATURE} は ${PREV} にマージ済みです"
+            echo "out_of_order=false" >> "$GITHUB_OUTPUT"
           else
             echo "::warning title=⚠ プロモーション順序未確認::${FEATURE} は ${PREV} にまだマージされていません。意図的な場合はそのまま進めてください。"
+            echo "out_of_order=true"  >> "$GITHUB_OUTPUT"
+            echo "feature=${FEATURE}" >> "$GITHUB_OUTPUT"
+            echo "prev=${PREV}"       >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Slack に順序未確認を通知
+        if: steps.sequence_check.outputs.out_of_order == 'true'
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          FEATURE="${{ steps.sequence_check.outputs.feature }}"
+          PREV="${{ steps.sequence_check.outputs.prev }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          DATETIME=$(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S JST')
+
+          MESSAGE=":warning: *マージ順序の確認が必要です*\n• ブランチ \`${FEATURE}\` は \`${PREV}\` にまだマージされていません\n• PR: <${PR_URL}|#${PR_NUMBER} ${PR_TITLE}>\n• 実行日時: ${DATETIME}\n• 意図的な場合はそのままマージを進めてください"
+          PAYLOAD="{\"channel\": \"${SLACK_CHANNEL_ID}\", \"text\": \"${MESSAGE}\"}"
+
+          curl -s -X POST "https://slack.com/api/chat.postMessage" \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
