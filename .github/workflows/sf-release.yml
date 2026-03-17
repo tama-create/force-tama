@@ -2,8 +2,8 @@
 # ワークフロー名: Salesforce 本番リリース（PR マージ後自動実行）
 # 概要: PRのマージをトリガーに、対応するSalesforce組織へリリースを実行する
 #   - main        → 本番組織 (prod)
-#   - staging     → Sandbox: stg
-#   - development → Sandbox: dev
+#   - staging     → Sandbox: staging
+#   - develop     → Sandbox: develop
 #
 # 【注意】sf-metasync.sh による自動伝播 push ではデプロイを実行しない。
 #         PRマージ（人間による意図的なリリース操作）時のみデプロイする。
