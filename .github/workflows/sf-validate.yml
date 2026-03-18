@@ -57,10 +57,10 @@ jobs:
   sequence-check:
     name: マージ順序を検証（プロモーション順序チェック）
     runs-on: ubuntu-latest
-    if: github.base_ref == 'main' || github.base_ref == 'staging'
 
     steps:
       - name: ソースコードを取得
+        if: github.base_ref == 'main' || github.base_ref == 'staging'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -70,6 +70,12 @@ jobs:
         run: |
           FEATURE="${{ github.event.pull_request.head.ref }}"
           BASE="${{ github.event.pull_request.base.ref }}"
+
+          # develop への PR はチェック不要（OK として終了）
+          if [ "$BASE" != "main" ] && [ "$BASE" != "staging" ]; then
+            echo "develop への PR のため、マージ順序チェックは不要です。"
+            exit 0
+          fi
 
           # マージ元が develop または staging の場合はエラーでブロック
           if [ "$FEATURE" = "develop" ] || [ "$FEATURE" = "staging" ]; then
