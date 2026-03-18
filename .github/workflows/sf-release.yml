@@ -1,14 +1,18 @@
 # ==============================================================================
-# ワークフロー名: Salesforce 本番リリース（PR マージ後自動実行）
-# 概要: PRのマージをトリガーに、対応するSalesforce組織へリリースを実行する
-#   - main        → 本番組織 (prod)
-#   - staging     → Sandbox: staging
-#   - develop     → Sandbox: develop
-#
-# 【注意】sf-metasync.sh による自動伝播 push ではデプロイを実行しない。
-#         PRマージ（人間による意図的なリリース操作）時のみデプロイする。
+# sf-release.yml - Salesforce リリース（PR マージ後自動実行）
 # ==============================================================================
-name: Salesforce 本番リリース（PR マージ後自動実行）
+# 開発者が PR をマージしたタイミングで、対応する Salesforce 組織へ自動デプロイします。
+#
+# 【デプロイ先】
+#   main    への PR マージ → 本番組織（prod）へリリース
+#   staging への PR マージ → Sandbox: staging へリリース
+#   develop への PR マージ → Sandbox: develop へリリース
+#
+# 【注意事項】
+#   - sf-metasync.sh / sf-propagate.yml による自動 push ではデプロイしない
+#   - 人間が PR をマージした場合（意図的なリリース操作）のみデプロイする
+# ==============================================================================
+name: sf-release リリース（PR マージ後自動実行）
 
 # ------------------------------------------------------------------------------
 # 実行トリガーの設定
@@ -30,7 +34,7 @@ on:
 # ------------------------------------------------------------------------------
 jobs:
   release:
-    name: Salesforce リリースを実行
+    name: リリース実行
     # PRイベントの場合はマージ済みのみ実行（クローズだけでは実行しない）
     if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     # 実行環境: GitHubが提供する最新のUbuntu（Linux）ランナーを使用
@@ -118,7 +122,7 @@ jobs:
 
       # Step 7: 対応するSalesforce組織へのリリース実行
       # release/<branch>/deploy-target.txt に記載されたコンポーネントをデプロイする
-      - name: Salesforce にリリースを実行
+      - name: リリース実行
         run: |
           BRANCH="${{ github.event.pull_request.base.ref || github.ref_name }}"
           if [ "$BRANCH" = "main" ]; then
