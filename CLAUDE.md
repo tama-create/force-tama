@@ -47,7 +47,7 @@ Salesforce の設定・カスタマイズをバージョン管理で管理する
    ├─> sf-metasync.yml  : org → Git 自動同期（平日 9〜19時 毎時）
    ├─> sf-release.yml   : PR マージ → 対応 org へ自動リリース + Slack 通知
    ├─> sf-propagate.yml : main への PR マージ → staging・develop へ直接伝播
-   └─> sf-sequence.yml  : staging/main への PR 作成時にマージ順序を確認（Slack 通知付き・警告のみ）
+   └─> sf-validate.yml  : PR 作成時にマージ順序チェック → Salesforce デプロイ前検証（2段階）
 ```
 
 ### sf-tools が force-tama に生成するファイル
@@ -127,8 +127,7 @@ bash sf-start.sh
 - `.github/workflows/sf-metasync.yml` — force-tama のものをコピーし、必要に応じて調整
 - `.github/workflows/sf-release.yml` — force-tama のものをコピー（Slack通知含む）
 - `.github/workflows/sf-propagate.yml` — force-tama のものをコピー
-- `.github/workflows/sf-sequence.yml` — force-tama のものをコピー
-- `.github/workflows/sf-validate.yml` — force-tama のものをコピー
+- `.github/workflows/sf-validate.yml` — force-tama のものをコピー（マージ順序チェック + デプロイ前検証の2段階）
 - GitHub Secrets に以下を登録
   - `SFDX_AUTH_URL_PROD` — `sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'`（本番org）
   - `SFDX_AUTH_URL_STG` — 同上（staging Sandbox）
@@ -177,7 +176,8 @@ bash sf-start.sh
 
 ## CI/CD プロモーション確認（GitHub Actions）
 
-`.github/workflows/sf-sequence.yml` が `staging` / `main` への PR 作成時に実行される。
+`.github/workflows/sf-validate.yml` の Job 1（`sequence-check`）が `staging` / `main` への PR 作成時に実行される。
+sequence-check が失敗した場合、Job 2（`validate`）はスキップされる。
 
 | PR のマージ先 | 確認内容                                  |
 | ------------- | ----------------------------------------- |
@@ -185,7 +185,7 @@ bash sf-start.sh
 | `main`        | フィーチャーブランチが `staging` にマージ済みか  |
 
 - 順序が守られていない場合は PR の Annotations に**黄色いワーニング**を表示し、Slack に通知するが、マージはブロックしない
-- マージ元が `develop` / `staging` ブランチそのものの場合は `::error::` でブロック
+- マージ元が `develop` / `staging` ブランチそのものの場合は `::error::` でブロック（デプロイ前検証もスキップ）
 
 ## CI/CD 変更伝播フロー（GitHub Actions）
 

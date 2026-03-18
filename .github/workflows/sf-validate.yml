@@ -1,15 +1,24 @@
 # ==============================================================================
-# sf-validate.yml - Salesforce PR 検証ワークフロー
+# sf-validate.yml - Salesforce PR チェック（マージ順序確認 + デプロイ前検証）
 # ==============================================================================
-# PR 作成・更新時に sf-release.sh (検証のみ・本番反映なし) を自動実行します。
-# レビュアーは「PR が来た = Salesforce 検証済み」と判断できます。
+# PR 作成・更新時に以下の2段階チェックを実行します。
+#
+# 【Job 1: sequence-check】マージ順序チェック（main / staging への PR のみ）
+#   - フィーチャーブランチが下位ブランチにマージ済みか確認
+#   - マージ元が develop / staging の場合はエラーでブロック
+#   - 順序未確認の場合は警告のみ（マージはブロックしない）
+#
+# 【Job 2: validate】Salesforce デプロイ前検証（全 PR）
+#   - sequence-check が失敗（エラーブロック）した場合はスキップ
+#   - sequence-check が成功 or スキップ（develop への PR）の場合のみ実行
+#   - sf-release.sh (dry-run) でデプロイ可能かを確認
 #
 # 【セットアップ手順】
 # GitHub リポジトリの Settings → Secrets and variables → Actions に以下を追加:
 #
-#   SFDX_AUTH_URL_DEV   : development ブランチへの PR で使用する組織の認証 URL
-#   SFDX_AUTH_URL_STG   : staging     ブランチへの PR で使用する組織の認証 URL
-#   SFDX_AUTH_URL_PROD  : main        ブランチへの PR で使用する組織の認証 URL
+#   SFDX_AUTH_URL_DEV   : develop  ブランチへの PR で使用する組織の認証 URL
+#   SFDX_AUTH_URL_STG   : staging  ブランチへの PR で使用する組織の認証 URL
+#   SFDX_AUTH_URL_PROD  : main     ブランチへの PR で使用する組織の認証 URL
 #
 #   取得方法: sf org display --verbose --json | grep sfdxAuthUrl
 #   例: force://PlatformCLI::token@domain.salesforce.com
@@ -18,6 +27,9 @@
 #     sf-tools リポジトリの HTTPS URL
 #     例: https://github.com/your-org/sf-tools.git
 #     ※ プライベートリポジトリの場合: https://TOKEN@github.com/your-org/sf-tools.git
+#
+#   SLACK_BOT_TOKEN     : Slack Bot Token（xoxb- で始まる文字列）
+#   SLACK_CHANNEL_ID    : 通知先チャンネル ID（C で始まる文字列）
 #
 # 【PR マージ先と使用組織の対応】
 #   main        → SFDX_AUTH_URL_PROD（本番組織）
@@ -31,16 +43,98 @@
 #     （sf-start.sh 実行時に自動生成されます）
 # ==============================================================================
 
-name: Salesforce デプロイ前検証（PR 自動チェック）
+name: Salesforce PR チェック（マージ順序 + デプロイ前検証）
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
+
+  # ============================================================================
+  # Job 1: マージ順序チェック（main / staging への PR のみ実行）
+  # ============================================================================
+  sequence-check:
+    name: マージ順序を検証（プロモーション順序チェック）
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ソースコードを取得
+        if: github.base_ref == 'main' || github.base_ref == 'staging'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: マージ順序を検証
+        id: sequence_check
+        run: |
+          FEATURE="${{ github.event.pull_request.head.ref }}"
+          BASE="${{ github.event.pull_request.base.ref }}"
+
+          # develop への PR はチェック不要（OK として終了）
+          if [ "$BASE" != "main" ] && [ "$BASE" != "staging" ]; then
+            echo "develop への PR のため、マージ順序チェックは不要です。"
+            exit 0
+          fi
+
+          # マージ元が develop または staging の場合はエラーでブロック
+          if [ "$FEATURE" = "develop" ] || [ "$FEATURE" = "staging" ]; then
+            echo "::error title=マージ元ブランチ不正::${FEATURE} からのPRは許可されていません。必ずフィーチャーブランチからPRを作成してください。"
+            exit 1
+          fi
+
+          if [ "$BASE" = "main" ]; then
+            PREV="staging"
+          elif [ "$BASE" = "staging" ]; then
+            PREV="develop"
+          else
+            echo "チェック対象外のブランチです"
+            exit 0
+          fi
+
+          git fetch origin $PREV
+
+          if git merge-base --is-ancestor origin/$FEATURE origin/$PREV; then
+            echo "::notice title=プロモーション順序OK::✓ ${FEATURE} は ${PREV} にマージ済みです"
+            echo "out_of_order=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=⚠ プロモーション順序未確認::${FEATURE} は ${PREV} にまだマージされていません。意図的な場合はそのまま進めてください。"
+            echo "out_of_order=true"  >> "$GITHUB_OUTPUT"
+            echo "feature=${FEATURE}" >> "$GITHUB_OUTPUT"
+            echo "prev=${PREV}"       >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Slack に順序未確認を通知
+        if: steps.sequence_check.outputs.out_of_order == 'true'
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+        run: |
+          FEATURE="${{ steps.sequence_check.outputs.feature }}"
+          PREV="${{ steps.sequence_check.outputs.prev }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          DATETIME=$(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S JST')
+
+          MESSAGE=":warning: *マージ順序の確認が必要です*\n• ブランチ \`${FEATURE}\` は \`${PREV}\` にまだマージされていません\n• PR: <${PR_URL}|#${PR_NUMBER} ${PR_TITLE}>\n• 実行日時: ${DATETIME}\n• 意図的な場合はそのままマージを進めてください"
+          PAYLOAD="{\"channel\": \"${SLACK_CHANNEL_ID}\", \"text\": \"${MESSAGE}\"}"
+
+          curl -s -X POST "https://slack.com/api/chat.postMessage" \
+            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
+  # ============================================================================
+  # Job 2: Salesforce デプロイ前検証
+  #   - sequence-check が失敗（エラーブロック）した場合はスキップ
+  #   - sequence-check がスキップ（develop への PR）または成功した場合は実行
+  # ============================================================================
   validate:
     name: Salesforce 検証（本番反映なし・確認のみ）
     runs-on: ubuntu-latest
+    needs: [sequence-check]
+    if: always() && (needs.sequence-check.result == 'success' || needs.sequence-check.result == 'skipped')
     permissions:
       pull-requests: write  # PR へのコメント投稿に必要
 
@@ -65,6 +159,7 @@ jobs:
       #      誤検知しない（Re-run しても結果が変わらない）
       # -------------------------------------------------------------------------
       - name: main の最新取込確認
+        if: github.base_ref == 'main'
         run: |
           PR_HEAD="${{ github.event.pull_request.head.sha }}"
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
@@ -87,7 +182,7 @@ jobs:
         run: npm install -g @salesforce/cli
 
       # -------------------------------------------------------------------------
-      # 3. 自動化ツール（sf-tools）をセットアップ
+      # 4. 自動化ツール（sf-tools）をセットアップ
       # -------------------------------------------------------------------------
       - name: 自動化ツール（sf-tools）を取得
         run: |
@@ -95,16 +190,16 @@ jobs:
           chmod +x "$HOME/sf-tools/"*.sh "$HOME/sf-tools/lib/"*.sh
 
       # -------------------------------------------------------------------------
-      # 4. 接続先 Salesforce 組織を選択
-      #    main → 本番 / staging → ステージング / development（その他）→ 開発
+      # 5. 接続先 Salesforce 組織を選択
+      #    main → 本番 / staging → ステージング / develop（その他）→ 開発
       # -------------------------------------------------------------------------
       - name: 接続先組織を選択（マージ先ブランチに応じて切り替え）
         run: |
           BASE="${{ github.base_ref }}"
-          if   [[ "$BASE" == "main"        ]]; then
+          if   [[ "$BASE" == "main"    ]]; then
             echo "SFDX_AUTH_URL=${{ secrets.SFDX_AUTH_URL_PROD }}" >> "$GITHUB_ENV"
             echo "接続先: 本番組織"
-          elif [[ "$BASE" == "staging"     ]]; then
+          elif [[ "$BASE" == "staging" ]]; then
             echo "SFDX_AUTH_URL=${{ secrets.SFDX_AUTH_URL_STG }}"  >> "$GITHUB_ENV"
             echo "接続先: ステージング組織"
           else
@@ -113,7 +208,7 @@ jobs:
           fi
 
       # -------------------------------------------------------------------------
-      # 5. Salesforce 組織にログイン
+      # 6. Salesforce 組織にログイン
       # -------------------------------------------------------------------------
       - name: Salesforce 組織にログイン
         run: |
@@ -125,7 +220,7 @@ jobs:
           rm -f /tmp/sf_auth.txt
 
       # -------------------------------------------------------------------------
-      # 6. デプロイ対象ブランチを設定
+      # 7. デプロイ対象ブランチを設定
       #    sf-release.sh は sf-tools/release/branch_name.txt を参照します
       # -------------------------------------------------------------------------
       - name: デプロイ対象ブランチを設定
@@ -135,7 +230,7 @@ jobs:
           echo "対象ブランチ: ${{ github.head_ref }}"
 
       # -------------------------------------------------------------------------
-      # 7. Salesforce 検証を実行（本番反映なし）
+      # 8. Salesforce 検証を実行（本番反映なし）
       # -------------------------------------------------------------------------
       - name: Salesforce にデプロイ検証を実行（本番反映なし）
         id: sf_validate
@@ -149,7 +244,7 @@ jobs:
           echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
 
       # -------------------------------------------------------------------------
-      # 8. 検証結果を PR に投稿
+      # 9. 検証結果を PR に投稿
       # -------------------------------------------------------------------------
       - name: 検証結果を PR に投稿
         if: always()
@@ -196,7 +291,7 @@ jobs:
             });
 
       # -------------------------------------------------------------------------
-      # 9. 検証失敗時はマージをブロック
+      # 10. 検証失敗時はマージをブロック
       # -------------------------------------------------------------------------
       - name: 検証失敗時はマージをブロック
         if: always()
