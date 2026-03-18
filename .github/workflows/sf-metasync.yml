@@ -79,7 +79,7 @@ jobs:
         run: echo y | sf plugins install sfdx-git-delta
 
       # Step 6: Salesforce組織への認証（ログイン）
-      - name: Salesforce 組織にログイン
+      - name: 組織にログイン
         run: |
           # GitHub Secrets に登録した SFDX_AUTH_URL_PROD を一時ファイルに書き出し
           echo "${{ secrets.SFDX_AUTH_URL_PROD }}" > auth.txt

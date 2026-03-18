@@ -55,6 +55,8 @@ jobs:
   # Job 1: マージ順序チェック（main / staging への PR のみ実行）
   # ============================================================================
   sequence-check:
+    # ⚠️ name を変更する場合は protect-main / protect-staging の
+    #    Required status checks も同時に更新すること
     name: マージ順序を検証
     runs-on: ubuntu-latest
 
@@ -131,7 +133,9 @@ jobs:
   #   - sequence-check がスキップ（develop への PR）または成功した場合は実行
   # ============================================================================
   validate:
-    name: Salesforce リリース検証
+    # ⚠️ name を変更する場合は protect-main / protect-staging の
+    #    Required status checks も同時に更新すること
+    name: デプロイ検証
     runs-on: ubuntu-latest
     needs: [sequence-check]
     if: always() && (needs.sequence-check.result == 'success' || needs.sequence-check.result == 'skipped')
@@ -210,7 +214,7 @@ jobs:
       # -------------------------------------------------------------------------
       # 6. Salesforce 組織にログイン
       # -------------------------------------------------------------------------
-      - name: Salesforce 組織にログイン
+      - name: 組織にログイン
         run: |
           echo "$SFDX_AUTH_URL" > /tmp/sf_auth.txt
           sf org login sfdx-url \
@@ -232,7 +236,7 @@ jobs:
       # -------------------------------------------------------------------------
       # 8. Salesforce 検証を実行（本番反映なし）
       # -------------------------------------------------------------------------
-      - name: Salesforce にデプロイ検証を実行（本番反映なし）
+      - name: デプロイ検証を実行（本番反映なし）
         id: sf_validate
         env:
           SF_TARGET_ORG: ci-org
