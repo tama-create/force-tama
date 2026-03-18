@@ -117,7 +117,7 @@
 #
 # force-app/main/default/layouts/Account-My_Layout.layout-meta.xml
 # force-app/main/default/layouts/MyObject__c-My_Layout.layout-meta.xml
-#force-app/main/default/layouts/Account-Account %28Marketing%29 Layout.layout-meta.xml
+force-app/main/default/layouts/Account-Account %28Marketing%29 Layout.layout-meta.xml
 
 # ------------------------------------------------------------------------------
 # Lightning ページ（FlexiPage）
