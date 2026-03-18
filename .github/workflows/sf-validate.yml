@@ -153,6 +153,7 @@ jobs:
       #      誤検知しない（Re-run しても結果が変わらない）
       # -------------------------------------------------------------------------
       - name: main の最新取込確認
+        if: github.base_ref == 'main'
         run: |
           PR_HEAD="${{ github.event.pull_request.head.sha }}"
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
