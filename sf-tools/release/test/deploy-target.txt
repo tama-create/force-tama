@@ -23,8 +23,8 @@
 # .cls ファイルを指定します。-meta.xml は自動的に含まれるため指定不要です。
 #
 # force-app/main/default/classes/MyClass.cls
-force-app/main/default/classes/AccountService.cls
-force-app/main/default/classes/AccountServiceTest.cls
+#force-app/main/default/classes/AccountService.cls
+#force-app/main/default/classes/AccountServiceTest.cls
 
 # ------------------------------------------------------------------------------
 # Apex トリガー
