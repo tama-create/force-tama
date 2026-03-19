@@ -21,7 +21,7 @@ Salesforce の設定・カスタマイズをバージョン管理で管理する
 | `sf-restart.sh`               | 接続先 org の切り替え（設定ファイルをクリアして sf-start.sh を再実行）                                                         |
 | `sf-release.sh`               | `deploy-target.txt` / `remove-target.txt` からマニフェストを生成してデプロイ。デフォルトはドライラン（`--release` で本番実行） |
 | `sf-deploy.sh`                | `sf-release.sh --release --force` のショートカット（コンフリクト無視の強制デプロイ）                                           |
-| `sf-metasync.sh`              | org からメタデータ取得 → Prettier フォーマット → Git コミット&プッシュ（GitHub Actions から呼び出し）                          |
+| `sf-metasync.sh`              | org からメタデータ取得 → Git コミット&プッシュ（GitHub Actions から呼び出し）                                                   |
 | `sf-hook.sh` / `sf-unhook.sh` | pre-push フックの設置・解除                                                                                                    |
 | `sf-install.sh`               | sf-tools 本体の更新とラッパースクリプトの再生成                                                                                |
 
@@ -39,15 +39,15 @@ Salesforce の設定・カスタマイズをバージョン管理で管理する
 
 [git push]
    └─> .git/hooks/pre-push
-       └─> sf-release.sh (ドライラン検証)
-           ├─ OK → push 続行
-           └─ NG → push ブロック
+       └─> sf-mergecheck.sh (main 同期チェック)
+           ├─ 同期済み → push 続行
+           └─ 未取込あり → push ブロック
 
 [GitHub Actions]
-   ├─> sf-metasync.yml       : org → Git 自動同期（平日 9〜19時 毎時）
-   ├─> sf-release.yml        : PR マージ → 対応 org へ自動リリース + Slack 通知
-   ├─> sf-propagate.yml      : main への PR マージ → staging・development へ直接伝播
-   └─> sf-promotion-check.yml: staging/main への PR 作成時にプロモーション順序を確認（警告のみ）
+   ├─> sf-metasync.yml  : org → Git 自動同期（平日 9〜19時 毎時）
+   ├─> sf-release.yml   : PR マージ → 対応 org へ自動リリース + Slack 通知
+   ├─> sf-propagate.yml : main への PR マージ → staging・develop へ直接伝播
+   └─> sf-validate.yml  : PR 作成時にマージ順序チェック → Salesforce デプロイ前検証（2段階）
 ```
 
 ### sf-tools が force-tama に生成するファイル
@@ -106,11 +106,11 @@ git add .
 git commit -m "initial commit"
 gh repo create force-xxx --private --source=. --push   # GitHub CLI 使用
 
-# 3. ブランチを作成してプッシュ（main / staging / development の3ブランチ必須）
+# 3. ブランチを作成してプッシュ（main / staging / develop の3ブランチ必須）
 #    ※ 運用上1〜2層しか使わない場合でも必ず3つ作成すること
-#      （sf-propagate.yml が development ブランチの存在を前提としているため）
+#      （sf-propagate.yml が develop ブランチの存在を前提としているため）
 git checkout -b staging && git push origin staging
-git checkout -b development && git push origin development
+git checkout -b develop && git push origin develop
 git checkout main
 
 # 4. sf-tools のラッパーを初回生成（sf-tools がインストール済みであること）
@@ -127,68 +127,76 @@ bash sf-start.sh
 - `.github/workflows/sf-metasync.yml` — force-tama のものをコピーし、必要に応じて調整
 - `.github/workflows/sf-release.yml` — force-tama のものをコピー（Slack通知含む）
 - `.github/workflows/sf-propagate.yml` — force-tama のものをコピー
-- `.github/workflows/sf-promotion-check.yml` — force-tama のものをコピー
+- `.github/workflows/sf-validate.yml` — force-tama のものをコピー（マージ順序チェック + デプロイ前検証の2段階）
 - GitHub Secrets に以下を登録
   - `SFDX_AUTH_URL_PROD` — `sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'`（本番org）
-  - `SFDX_AUTH_URL_STG` — 同上（stg Sandbox）
-  - `SFDX_AUTH_URL_DEV` — 同上（dev Sandbox）
+  - `SFDX_AUTH_URL_STG` — 同上（staging Sandbox）
+  - `SFDX_AUTH_URL_DEV` — 同上（develop Sandbox）
   - `SLACK_BOT_TOKEN` — Slack App の Bot User OAuth Token（`xoxb-` で始まる文字列）
   - `SLACK_CHANNEL_ID` — 通知先 Slack チャンネル ID（`C` で始まる文字列）
 
-`npm install` は `sf-start.sh` 経由で `sf-install.sh` が自動実行する（Prettier 含む）。
+`npm install` は `sf-start.sh` 経由で `sf-install.sh` が自動実行する。
 
 ## メタデータ構造
 
 - `force-app/main/default/flexipages/` — Lightning アプリのユーティリティバー 12 件（例: `LightningSales_UtilityBar`）
 - `force-app/main/default/layouts/` — Salesforce オブジェクトのページレイアウト 199 件以上
 - `force-app/main/default/permissionsets/` — 権限セット 4 件（ProfileManager・DevOps・NamedCredentials・内部 SFDC Security）
-- `release/main/` / `release/staging/` / `release/development/` — ブランチごとの個別デプロイパッケージ定義
+- `release/main/` / `release/staging/` / `release/develop/` — ブランチごとの個別デプロイパッケージ定義
 
 ## CI/CD 同期フロー（GitHub Actions）
 
 1. `.github/workflows/sf-metasync.yml` が平日 9〜19時（JST）に毎時実行、または手動トリガー
 2. `SFDX_AUTH_URL_PROD` シークレットで Salesforce 認証
 3. `sfdx-git-delta`（Java 17 必須）でコミット間のメタデータ差分を抽出
-4. `sf-metasync.sh` が org からメタデータ取得 → Prettier フォーマット → Git に自動コミット
+4. `sf-metasync.sh` が org からメタデータ取得 → Git に自動コミット
 
 ## CI/CD リリースフロー（GitHub Actions）
 
 `.github/workflows/sf-release.yml` がPR マージをトリガーに、対応する Salesforce 組織へ自動リリースする。
 `sf-metasync.sh` による直接 push では発火しない（PR マージ時のみ）。
 
-| ブランチ      | リリース先   | 使用シークレット     |
-| ------------- | ------------ | -------------------- |
-| `main`        | 本番組織     | `SFDX_AUTH_URL_PROD` |
-| `staging`     | Sandbox: stg | `SFDX_AUTH_URL_STG`  |
-| `development` | Sandbox: dev | `SFDX_AUTH_URL_DEV`  |
+| ブランチ    | リリース先          | 使用シークレット     |
+| ----------- | ------------------- | -------------------- |
+| `main`      | 本番組織            | `SFDX_AUTH_URL_PROD` |
+| `staging`   | Sandbox: staging    | `SFDX_AUTH_URL_STG`  |
+| `develop`   | Sandbox: develop    | `SFDX_AUTH_URL_DEV`  |
 
 - `release/<branch>/deploy-target.txt` に記載されたコンポーネントをデプロイする
 - 各 Sandbox の認証 URL は `sf org display --verbose --json | jq -r '.result.sfdxAuthUrl'` で取得し、GitHub Secrets に登録する
 - リリース結果は Slack（`SLACK_BOT_TOKEN` + `SLACK_CHANNEL_ID`）に通知する
 - 同一フィーチャーブランチの dev → stg → main 通知は GitHub Actions キャッシュで `thread_ts` を引き継ぎ、1つのスレッドにまとまる
 
+## CI/CD PR 検証フロー（GitHub Actions）
+
+`.github/workflows/sf-validate.yml` が PR 作成・更新をトリガーに dry-run 検証を実行する。
+
+- **main 最新取込確認:** feature ブランチが `main` の最新を取り込み済みか確認。未取込の場合は検証を失敗させてマージをブロック
+- **dry-run 検証:** `sf project deploy start --dry-run` を実行し、デプロイ可能かを確認
+
 ## CI/CD プロモーション確認（GitHub Actions）
 
-`.github/workflows/sf-promotion-check.yml` が `staging` / `main` への PR 作成時に実行される。
+`.github/workflows/sf-validate.yml` の Job 1（`sequence-check`）が `staging` / `main` への PR 作成時に実行される。
+sequence-check が失敗した場合、Job 2（`validate`）はスキップされる。
 
-| PR のマージ先 | 確認内容                                       |
-| ------------- | ---------------------------------------------- |
-| `staging`     | フィーチャーブランチが `development` にマージ済みか |
-| `main`        | フィーチャーブランチが `staging` にマージ済みか     |
+| PR のマージ先 | 確認内容                                  |
+| ------------- | ----------------------------------------- |
+| `staging`     | フィーチャーブランチが `develop` にマージ済みか |
+| `main`        | フィーチャーブランチが `staging` にマージ済みか  |
 
-- 順序が守られていない場合は PR の Annotations に**黄色いワーニング**を表示するが、マージはブロックしない
-- マージ元が `development` / `staging` ブランチそのものの場合は `::error::` でブロック
+- 順序が守られていない場合は PR の Annotations に**黄色いワーニング**を表示し、Slack に通知するが、マージはブロックしない
+- マージ元が `develop` / `staging` ブランチそのものの場合は `::error::` でブロック（デプロイ前検証もスキップ）
 
 ## CI/CD 変更伝播フロー（GitHub Actions）
 
 `.github/workflows/sf-propagate.yml` が `main` への PR マージをトリガーに、下位ブランチへ直接変更を伝播する。
 
-| トリガー          | 伝播先                                              |
-| ----------------- | --------------------------------------------------- |
-| `main` へのマージ | main → staging（直接）、main → development（直接） |
+| トリガー          | 伝播先                                          |
+| ----------------- | ----------------------------------------------- |
+| `main` へのマージ | main → staging（直接）、main → develop（直接） |
 
-- `git merge origin/main` を staging・development それぞれに実行してプッシュ
-- `staging` へのマージでは発火しない（staging → development の自動伝播なし）
+- `git merge origin/main` を staging・develop それぞれに実行してプッシュ
+- `staging` へのマージでは発火しない（staging → develop の自動伝播なし）
 - `sf-metasync.sh` による直接 push では発火しない（PR マージ時のみ）
 
 ### フィーチャーブランチの運用ルール（プロモーション型）
@@ -196,11 +204,11 @@ bash sf-start.sh
 複数フィーチャーの並走を安全に行うため、**プロモーション型**を採用する。
 
 ```
-DEV001 ──→ development にPR・マージ  → dev Sandbox にデプロイ
-DEV001 ──→ staging にPR・マージ      → stg Sandbox にデプロイ
+DEV001 ──→ develop にPR・マージ      → develop Sandbox にデプロイ
+DEV001 ──→ staging にPR・マージ      → staging Sandbox にデプロイ
 DEV001 ──→ main にPR・マージ         → 本番組織にデプロイ
 ```
 
-- フィーチャーブランチは `development → staging → main` の順ではなく、**各環境ブランチに直接 PR する**
+- フィーチャーブランチは `develop → staging → main` の順ではなく、**各環境ブランチに直接 PR する**
 - `release/DEV001/deploy-target.txt` を一度作成すれば、3環境すべてに使い回せる
 - `release/branch_name.txt` は git 管理外（`.gitignore`）。sf-release.yml がマージ時に PR のマージ元ブランチ名（`github.event.pull_request.head.ref`）を動的に書き込む
