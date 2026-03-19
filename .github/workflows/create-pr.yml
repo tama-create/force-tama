@@ -1,0 +1,30 @@
+name: "🚀 手動PR作成ツール"
+
+on:
+  workflow_dispatch: # これが「手動実行ボタン」を作る設定です
+    inputs:
+      target_env:
+        description: '反映先を選択してください'
+        required: true
+        default: 'STAGING'
+        type: choice
+        options:
+          - STAGING
+          - MAIN
+
+jobs:
+  create-pull-request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Pull Request
+        uses: repo-sync/pull-request@v2
+        with:
+          destination_branch: ${{ github.event.inputs.target_env }} # ボタンで選んだ先
+          source_branch: "DEVELOP" # 元は固定
+          pr_title: "【${{ github.event.inputs.target_env }}反映】定期リリース"
+          pr_body: "動作検証が完了したら、ドラフトを解除してレビュー依頼を出してください。"
+          pr_draft: true # 最初は「下書き」で作る！
+          github_token: ${{ secrets.GITHUB_TOKEN }}
