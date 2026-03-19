@@ -1,94 +1,22 @@
-# ==============================================================================
-# ワークフロー名: ブランチへ変更を伝播（main マージ後自動実行）
-# 概要: main への PR マージをトリガーに、各ブランチへ直接変更を伝播する
-#   - main    への PR マージ → main → staging（直接）
-#                            → main → develop（直接）
-#
-# 【注意】sf-metasync.sh による直接 push では発火しない（PR マージ時のみ）。
-#         Salesforce メタデータの同期伝播は sf-metasync.sh が担う。
-# ==============================================================================
+# ブランチへ変更を伝播（main マージ後自動実行）
 name: ブランチへ変更を伝播（main マージ後自動実行）
 
-# ------------------------------------------------------------------------------
-# 実行トリガーの設定
-# ------------------------------------------------------------------------------
 on:
-  # main への PR がマージされたときに発火
   pull_request:
     types: [closed]
     branches:
       - main
-
-  # 手動実行の許可
   workflow_dispatch:
 
-# ブランチへの push 権限を付与
-permissions:
-  contents: write
-
-# ------------------------------------------------------------------------------
-# ジョブの定義
-# ------------------------------------------------------------------------------
 jobs:
-  propagate:
-    name: 下流ブランチへ変更を伝播
-    # PR マージ時のみ実行
+  call:
     if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-
-    steps:
-      # Step 1: 完全な履歴でチェックアウト
-      - name: ソースコードを取得
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      # Step 2: git ユーザー設定
-      - name: Git ユーザー情報を設定
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      # Step 3: main → staging へ直接伝播（main へのマージ時のみ）
-      - name: main から staging へ変更を伝播
-        id: propagate_staging
-        if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
-        run: |
-          git checkout staging
-          git merge origin/main --no-edit
-          git push origin staging
-
-      # Step 4: main → develop へ直接伝播（main へのマージ時のみ）
-      - name: main から develop へ変更を伝播
-        id: propagate_develop
-        if: (github.event.pull_request.base.ref || github.ref_name) == 'main'
-        run: |
-          git checkout develop
-          git merge origin/main --no-edit
-          git push origin develop
-
-      # Step 5: 失敗時に Slack 通知（失敗したブランチを特定して通知）
-      - name: Slack に失敗を通知
-        if: failure()
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-        run: |
-          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          DATETIME=$(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S JST')
-
-          FAILED_BRANCHES=""
-          if [ "${{ steps.propagate_staging.outcome }}" = "failure" ]; then
-            FAILED_BRANCHES="${FAILED_BRANCHES}\n• 失敗ブランチ: \`staging\` （コンフリクトの可能性）"
-          fi
-          if [ "${{ steps.propagate_develop.outcome }}" = "failure" ]; then
-            FAILED_BRANCHES="${FAILED_BRANCHES}\n• 失敗ブランチ: \`develop\` （コンフリクトの可能性）"
-          fi
-
-          MESSAGE=":x: *ブランチ自動伝播が失敗しました*${FAILED_BRANCHES}\n• 実行日時: ${DATETIME}\n• <${RUN_URL}|Actions ログを見る>"
-          PAYLOAD="{\"channel\": \"${SLACK_CHANNEL_ID}\", \"text\": \"${MESSAGE}\"}"
-          curl -s -X POST "https://slack.com/api/chat.postMessage" \
-            -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD"
+    uses: tamashimon-create/sf-tools/.github/workflows/sf-propagate-reusable.yml@main
+    with:
+      base_ref: ${{ github.event.pull_request.base.ref || github.ref_name }}
+      head_ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      pr_title: ${{ github.event.pull_request.title || '' }}
+      pr_number: "${{ github.event.pull_request.number }}"
+      pr_url: ${{ github.event.pull_request.html_url || '' }}
+      pr_sha: ${{ github.event.pull_request.head.sha || '' }}
+    secrets: inherit
